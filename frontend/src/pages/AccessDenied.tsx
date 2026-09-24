@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldAlert, ArrowLeft, LayoutDashboard } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const AccessDenied: React.FC = () => {
@@ -9,33 +9,35 @@ const AccessDenied: React.FC = () => {
   return (
     <div className="auth-container">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
-        className="auth-form-wrapper flex flex-col items-center justify-center text-center max-w-md p-10"
-        style={{ borderColor: 'rgba(239, 68, 68, 0.2)' }}
+        transition={{ duration: 0.25 }}
+        className="auth-form-wrapper flex flex-col items-center justify-center text-center"
+        style={{ borderColor: 'var(--color-critical-border)' }}
       >
-        <div className="flex justify-center mb-6">
-          <div className="p-4 bg-[var(--bg-critical)] rounded-full text-critical">
-            <ShieldAlert size={48} />
-          </div>
+        <div className="mb-4 p-3 rounded-full" style={{ background: 'var(--color-critical-bg)', color: 'var(--color-critical)' }}>
+          <ShieldAlert size={36} />
         </div>
-        <h1 className="text-2xl font-bold mb-4 text-critical">Access Denied</h1>
-        <p className="mb-8 text-secondary">
-          You do not have the required permissions to access this resource or perform this action. Please contact your system administrator if you believe this is an error.
+        <div className="status-badge status-critical mb-3">HTTP 403 · FORBIDDEN</div>
+        <h1 className="text-xl font-bold mb-2 text-primary">Access Restricted</h1>
+        <p className="mb-6 text-secondary text-xs leading-relaxed">
+          Your current session role does not have administrative clearance to access this resource 
+          or trigger this privileged security enforcement action.
         </p>
-        <div className="flex w-full gap-4">
+        <div className="flex w-full gap-3">
           <button 
             onClick={() => navigate(-1)} 
             className="btn btn-secondary flex-1"
           >
-            Go Back
+            <ArrowLeft size={14} />
+            <span>Go Back</span>
           </button>
           <button 
             onClick={() => navigate('/dashboard')} 
-            className="btn btn-primary flex-1"
+            className="btn btn-primary btn-accent flex-1"
           >
-            Dashboard
+            <LayoutDashboard size={14} />
+            <span>Dashboard</span>
           </button>
         </div>
       </motion.div>

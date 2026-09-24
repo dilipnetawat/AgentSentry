@@ -11,7 +11,7 @@ interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 export const Badge: React.FC<BadgeProps> = ({ 
   variant = 'default', 
   children, 
-  icon,
+  icon, 
   className = '',
   ...props 
 }) => {
@@ -20,8 +20,8 @@ export const Badge: React.FC<BadgeProps> = ({
       className={`status-badge status-${variant} ${className}`}
       {...props}
     >
-      {icon && <span className="flex items-center justify-center opacity-70">{icon}</span>}
-      {children}
+      {icon && <span className="flex items-center justify-center opacity-80">{icon}</span>}
+      <span>{children}</span>
     </span>
   );
 };

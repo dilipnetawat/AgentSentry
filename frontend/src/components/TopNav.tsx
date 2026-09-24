@@ -1,12 +1,13 @@
 import React from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Bell, CircleCheck, FlaskConical, LogOut } from 'lucide-react';
+import { Bell, LogOut } from 'lucide-react';
 import { fetchRecentAlerts } from '../services/api';
 
 const TopNav: React.FC = () => {
   const { logout, user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [activeAlerts, setActiveAlerts] = React.useState(0);
 
   React.useEffect(() => {
@@ -21,23 +22,38 @@ const TopNav: React.FC = () => {
   if (pathParts.length > 0) {
     title = pathParts[0].charAt(0).toUpperCase() + pathParts[0].slice(1);
     if (title === 'Events') title = 'Security Events';
+    if (title === 'Honeytokens') title = 'HoneyTokens';
   }
 
   return (
     <header className="top-nav">
-      <div className="top-nav-status">
-        <span className="top-nav-brand">AgentSentry</span><span className="top-nav-divider">/</span><span className="top-nav-page">{title}</span>
-        <span className="system-status"><CircleCheck size={14} /> System Online</span>
-        <span className="demo-status"><FlaskConical size={14} /> Demo Mode</span>
+      <div className="top-nav-breadcrumbs">
+        <span className="nav-brand-crumb">AgentSentry</span>
+        <span className="nav-crumb-separator">/</span>
+        <span className="nav-page-crumb">{title}</span>
       </div>
-      <div className="nav-actions flex items-center gap-4">
-        <button className="icon-button notification-button" aria-label={`${activeAlerts} active alerts`} title="Active alerts">
-          <Bell size={17} />
-          {activeAlerts > 0 && <span className="notification-count">{activeAlerts}</span>}
+
+      <div className="top-nav-actions">
+        <button 
+          className="notification-btn" 
+          aria-label={`${activeAlerts} active alerts`} 
+          title={activeAlerts > 0 ? `${activeAlerts} open alerts require attention` : "No open alerts"}
+          onClick={() => navigate('/alerts')}
+        >
+          <Bell size={16} />
+          {activeAlerts > 0 && <span className="notification-badge-dot">{activeAlerts}</span>}
         </button>
-        <div className="top-nav-user"><span className="user-avatar small">{user?.email?.charAt(0).toUpperCase()}</span><span><strong>{user?.role}</strong><small>{user?.email}</small></span></div>
-        <button className="btn btn-secondary text-xs" onClick={logout}>
-          <LogOut size={14} />
+
+        <div className="status-badge status-default">
+          ROLE: {user?.role?.toUpperCase() || 'OPERATOR'}
+        </div>
+
+        <button 
+          className="btn btn-secondary text-xs" 
+          onClick={logout}
+          title="Sign out of AgentSentry"
+        >
+          <LogOut size={13} />
           <span>Sign Out</span>
         </button>
       </div>

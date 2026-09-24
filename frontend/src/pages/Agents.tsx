@@ -33,57 +33,70 @@ const Agents: React.FC = () => {
   return (
     <div className="dashboard-container flex flex-col h-full">
       <PageHeader 
-        title="Agents" 
-        description="Manage and monitor registered AI agents."
-        icon={<Shield size={24} />}
+        title="Agent Fleet Management" 
+        description="Monitor registered AI agents, inspect live risk levels, and manage isolation states."
+        icon={<Shield size={20} />}
         actions={
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <button 
               className="btn btn-secondary p-2" 
               onClick={() => setPage(p => Math.max(0, p - 1))} 
               disabled={page === 0 || loading}
               aria-label="Previous Page"
+              title="Previous Page"
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={15} />
             </button>
-            <span className="text-sm font-medium text-secondary">Page {page + 1}</span>
+            <span className="text-sm font-medium text-secondary" style={{ minWidth: '60px', textAlign: 'center' }}>
+              Page {page + 1}
+            </span>
             <button 
               className="btn btn-secondary p-2" 
               onClick={() => setPage(p => p + 1)} 
               disabled={agents.length < LIMIT || loading}
               aria-label="Next Page"
+              title="Next Page"
             >
-              <ChevronRight size={16} />
+              <ChevronRight size={15} />
             </button>
           </div>
         }
       />
       
-      {error && <div className="form-error mb-4">{error}</div>}
+      {error && <div className="form-error">{error}</div>}
       
       <motion.section 
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="glass-surface flex-1 overflow-hidden flex flex-col mb-8"
+        transition={{ duration: 0.22 }}
+        className="glass-surface table-panel flex-1 overflow-hidden flex flex-col mb-8"
       >
+        <div className="workspace-section-heading">
+          <div>
+            <span className="workspace-eyebrow">FLEET DIRECTORY</span>
+            <h2>Registered Agent Inventory</h2>
+          </div>
+          <Badge variant="default">{agents.length} agents</Badge>
+        </div>
+
         {loading ? (
-          <div className="p-8"><SkeletonTable rows={8} columns={5} /></div>
+          <div className="p-6"><SkeletonTable rows={8} columns={5} /></div>
         ) : agents.length === 0 ? (
-          <div className="empty-state">
-            <Server size={48} className="empty-state-icon" />
-            <p>No agents found</p>
+          <div className="workspace-empty">
+            <Server size={32} />
+            <strong>No registered agents found</strong>
+            <span>Register an agent via the API or execute the Guided Security Demo.</span>
           </div>
         ) : (
-          <div className="table-container border-0 rounded-none flex-1">
+          <div className="table-container">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Name / ID</th>
+                  <th>Agent Name / Identity</th>
                   <th>Status</th>
-                  <th>Risk Score</th>
-                  <th>Registered</th>
-                  <th className="text-right">Actions</th>
+                  <th>Current Risk Score</th>
+                  <th>Registration Timestamp</th>
+                  <th className="text-right">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -91,8 +104,12 @@ const Agents: React.FC = () => {
                   <tr key={agent.id}>
                     <td>
                       <div>
-                        <strong className="font-medium text-primary">{agent.name}</strong>
-                        <div className="mono text-xs text-tertiary mt-1">{agent.id}</div>
+                        <strong className="text-primary font-medium" style={{ display: 'block' }}>
+                          {agent.name}
+                        </strong>
+                        <span className="mono text-xs text-tertiary mt-1" style={{ display: 'block' }}>
+                          {agent.id}
+                        </span>
                       </div>
                     </td>
                     <td>
@@ -100,10 +117,16 @@ const Agents: React.FC = () => {
                         {agent.status.toUpperCase()}
                       </Badge>
                     </td>
-                    <td className="mono">{agent.risk_score.toFixed(2)}</td>
-                    <td className="text-xs text-tertiary">{new Date(agent.created_at).toLocaleString()}</td>
+                    <td className="mono font-semibold" style={{ color: agent.risk_score > 60 ? 'var(--color-critical)' : 'var(--text-primary)' }}>
+                      {agent.risk_score.toFixed(2)}
+                    </td>
+                    <td className="text-xs text-secondary">
+                      {new Date(agent.created_at).toLocaleString()}
+                    </td>
                     <td className="text-right">
-                      <Link to={`/agents/${agent.id}`} className="btn btn-secondary text-xs py-1">View Details</Link>
+                      <Link to={`/agents/${agent.id}`} className="btn btn-secondary text-xs">
+                        View Details
+                      </Link>
                     </td>
                   </tr>
                 ))}

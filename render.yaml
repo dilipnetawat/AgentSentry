@@ -3,7 +3,7 @@ services:
     name: agentsentry-backend
     env: python
     buildCommand: "pip install -r backend/requirements.txt"
-    startCommand: "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+    startCommand: "alembic upgrade head && cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: ENVIRONMENT
         value: production

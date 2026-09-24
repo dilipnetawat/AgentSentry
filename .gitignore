@@ -17,3 +17,7 @@ venv/
 .vscode/
 .idea/
 *.swp
+
+# Database
+*.db
+*.sqlite3

@@ -6,7 +6,7 @@ import Modal from '../components/Modal';
 import { useToast } from '../contexts/ToastContext';
 import { Badge } from '../components/Badge';
 import { PageHeader } from '../components/PageHeader';
-import { Database, RefreshCw, Key } from 'lucide-react';
+import { Database, RefreshCw, Lock, KeyRound } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const HoneyTokens: React.FC = () => {
@@ -69,35 +69,44 @@ const HoneyTokens: React.FC = () => {
   return (
     <div className="dashboard-container flex flex-col h-full">
       <PageHeader 
-        title="HoneyTokens" 
-        description="Manage decoy credentials used to detect unauthorized access attempts."
-        icon={<Database size={24} />}
+        title="HoneyToken Decoy Credential Vault" 
+        description="Active decoy traps deployed across agent execution environments to detect unauthorized exfiltration."
+        icon={<Database size={20} />}
       />
       
-      {error && <div className="form-error mb-4">{error}</div>}
+      {error && <div className="form-error">{error}</div>}
 
       <motion.section 
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="glass-surface flex-1 overflow-hidden flex flex-col mb-8"
+        transition={{ duration: 0.22 }}
+        className="glass-surface table-panel flex-1 overflow-hidden flex flex-col mb-8"
       >
+        <div className="workspace-section-heading">
+          <div>
+            <span className="workspace-eyebrow">DECOY MESH</span>
+            <h2>Active Canary Traps</h2>
+          </div>
+          <Badge variant="default">{tokens.length} configured</Badge>
+        </div>
+
         {loading ? (
-          <div className="p-8"><SkeletonTable rows={4} columns={5} /></div>
+          <div className="p-6"><SkeletonTable rows={4} columns={5} /></div>
         ) : tokens.length === 0 ? (
-          <div className="empty-state">
-            <Key size={48} className="empty-state-icon" />
-            <p>No HoneyTokens configured</p>
+          <div className="workspace-empty">
+            <KeyRound size={32} />
+            <strong>No HoneyTokens configured</strong>
+            <span>Create a canary token via API or execute the HoneyToken Guided Security Demo scenario.</span>
           </div>
         ) : (
-          <div className="table-container border-0 rounded-none flex-1">
+          <div className="table-container">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Value</th>
+                  <th>Scope / Token Type</th>
+                  <th>Credential Value (Redacted)</th>
                   <th>Status</th>
-                  <th>Created</th>
+                  <th>Deployment Timestamp</th>
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
@@ -105,12 +114,23 @@ const HoneyTokens: React.FC = () => {
                 {tokens.map(token => (
                   <tr key={token.id}>
                     <td>
-                      <strong className="font-medium text-primary">{token.scope} / {token.token_type}</strong>
-                      <div className="mono text-xs text-tertiary mt-1">{token.id}</div>
+                      <div>
+                        <strong className="text-primary font-medium" style={{ display: 'block' }}>
+                          {token.scope} / {token.token_type}
+                        </strong>
+                        <span className="mono text-xs text-tertiary mt-1" style={{ display: 'block' }}>
+                          {token.id}
+                        </span>
+                      </div>
                     </td>
                     <td>
-                      <span className="mono text-xs bg-[rgba(255,255,255,0.05)] px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                        ••••••••••••••••
+                      <span 
+                        className="mono text-xs inline-flex items-center gap-1.5 px-2.5 py-1 rounded" 
+                        style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}
+                        title="Raw decoy credentials are cryptographic secrets and remain masked"
+                      >
+                        <Lock size={11} />
+                        <span>••••••••••••••••</span>
                       </span>
                     </td>
                     <td>
@@ -118,15 +138,18 @@ const HoneyTokens: React.FC = () => {
                         {token.status.toUpperCase()}
                       </Badge>
                     </td>
-                    <td className="text-xs text-tertiary">{new Date(token.created_at).toLocaleString()}</td>
+                    <td className="text-xs text-secondary">
+                      {new Date(token.created_at).toLocaleString()}
+                    </td>
                     <td className="text-right">
                       {token.status === 'active' && (
                         <button 
                           className="btn btn-secondary text-xs py-1"
                           onClick={() => handleRotateClick(token.id)}
+                          title="Rotate this decoy credential"
                         >
                           <RefreshCw size={12} />
-                          Rotate
+                          <span>Rotate Token</span>
                         </button>
                       )}
                     </td>
@@ -141,19 +164,24 @@ const HoneyTokens: React.FC = () => {
       <Modal 
         isOpen={modalOpen} 
         onClose={closeRotateModal} 
-        title="Confirm Rotation"
+        title="Confirm HoneyToken Rotation"
         actions={
           <>
-            <button className="btn btn-secondary" onClick={closeRotateModal} disabled={actionLoading}>Cancel</button>
+            <button className="btn btn-secondary" onClick={closeRotateModal} disabled={actionLoading}>
+              Cancel
+            </button>
             <button className="btn btn-danger" onClick={confirmRotate} disabled={actionLoading}>
-              {actionLoading ? 'Rotating...' : 'Rotate Token'}
+              {actionLoading ? 'Rotating Secret...' : 'Rotate Token'}
             </button>
           </>
         }
       >
-        <p className="m-0 text-sm">Are you sure you want to rotate this HoneyToken?</p>
-        <p className="mt-2 text-sm text-tertiary m-0">
-          The old token will be revoked immediately and a new token will be generated. You must update your environment variables or agent configurations with the new token.
+        <p className="m-0 text-sm">
+          Are you sure you want to rotate this decoy credential?
+        </p>
+        <p className="mt-2 text-tertiary m-0 text-xs leading-relaxed">
+          The current canary will be immediately invalidated and marked as revoked. A fresh 
+          cryptographic canary token will be generated and seeded into the active decoy mesh.
         </p>
       </Modal>
     </div>

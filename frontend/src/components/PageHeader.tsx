@@ -11,32 +11,32 @@ interface PageHeaderProps {
 export const PageHeader: React.FC<PageHeaderProps> = ({ 
   title, 
   description, 
-  icon,
+  icon, 
   actions 
 }) => {
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: -10 }}
+    <motion.header 
+      initial={{ opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.22, ease: "easeOut" }}
       className="workspace-page-header"
     >
-      <div className="flex items-center gap-3">
+      <div className="page-header-info">
         {icon && (
-          <div className="page-header-icon">
+          <div className="page-header-icon-box">
             {icon}
           </div>
         )}
-        <div>
-          <h2 className="text-2xl font-medium m-0 flex items-center gap-2">{title}</h2>
-          {description && <p className="text-sm text-tertiary m-0 mt-1">{description}</p>}
+        <div className="page-header-title-text">
+          <h1>{title}</h1>
+          {description && <p>{description}</p>}
         </div>
       </div>
       {actions && (
-        <div className="flex items-center gap-3">
+        <div className="page-header-actions">
           {actions}
         </div>
       )}
-    </motion.div>
+    </motion.header>
   );
 };

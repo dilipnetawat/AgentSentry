@@ -39,8 +39,18 @@ async def seed_admin():
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     
     async with async_session() as session:
-        await seed_user(session, "admin@agentsentry.local", "admin", "adminpassword")
-        await seed_user(session, "analyst@agentsentry.local", "analyst", "analystpassword")
+        admin_email = os.getenv("ADMIN_EMAIL", "admin@agentsentry.local")
+        admin_password = os.getenv("ADMIN_PASSWORD", "adminpassword")
+        analyst_email = os.getenv("ANALYST_EMAIL", "analyst@agentsentry.local")
+        analyst_password = os.getenv("ANALYST_PASSWORD", "analystpassword")
+        
+        env = os.getenv("ENVIRONMENT", "development")
+        if env == "production" and (admin_password == "adminpassword" or analyst_password == "analystpassword"):
+            print("WARNING: Cannot use default passwords in production. Skipping seed.")
+            return
+
+        await seed_user(session, admin_email, "admin", admin_password)
+        await seed_user(session, analyst_email, "analyst", analyst_password)
 
 if __name__ == "__main__":
     asyncio.run(seed_admin())

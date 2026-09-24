@@ -11,7 +11,7 @@ interface SpotlightCardProps extends HTMLMotionProps<"div"> {
 export const SpotlightCard: React.FC<SpotlightCardProps> = ({ 
   children, 
   className = '', 
-  glowColor = 'rgba(255, 255, 255, 0.1)',
+  glowColor = 'rgba(255, 255, 255, 0.08)',
   ...props 
 }) => {
   const [position, setPosition] = React.useState({ x: 0, y: 0 });
@@ -30,15 +30,16 @@ export const SpotlightCard: React.FC<SpotlightCardProps> = ({
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setOpacity(1)}
       onMouseLeave={() => setOpacity(0)}
-      className={`glass-surface relative overflow-hidden ${className}`}
+      className={`glass-surface ${className}`}
       {...props}
     >
       <div
-        className="spotlight-wash pointer-events-none absolute -inset-px transition-opacity duration-300"
+        className="spotlight-wash"
         style={{
           opacity,
-          background: `radial-gradient(600px circle at ${position.x}px ${position.y}px, ${glowColor}, transparent 40%)`,
+          background: `radial-gradient(450px circle at ${position.x}px ${position.y}px, ${glowColor}, transparent 60%)`,
         }}
+        aria-hidden="true"
       />
       <div className="relative z-10 h-full">
         {children}

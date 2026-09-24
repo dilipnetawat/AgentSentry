@@ -7,7 +7,7 @@ import { useToast } from '../contexts/ToastContext';
 import { SkeletonText } from '../components/SkeletonLoader';
 import { Badge } from '../components/Badge';
 import { SpotlightCard } from '../components/SpotlightCard';
-import { ArrowLeft, Shield, AlertTriangle, Fingerprint, Activity, Clock } from 'lucide-react';
+import { ArrowLeft, Shield, AlertTriangle, Fingerprint, Activity, Clock, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const AgentDetails: React.FC = () => {
@@ -48,7 +48,6 @@ const AgentDetails: React.FC = () => {
         await restoreAgent(agent.id);
         showToast('Agent restored successfully', 'success');
       }
-      // Refresh
       const data = await fetchAgentDetails(agent.id);
       setAgent(data);
     } catch (err: any) {
@@ -67,11 +66,11 @@ const AgentDetails: React.FC = () => {
   if (loading) {
     return (
       <div className="dashboard-container">
-        <SkeletonText width="200px" className="mb-4" />
-        <SkeletonText width="300px" className="mb-6" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-          <div className="glass-surface p-6"><SkeletonText width="100%" /><SkeletonText width="100%" /></div>
-          <div className="glass-surface p-6"><SkeletonText width="100%" /><SkeletonText width="100%" /></div>
+        <SkeletonText width="160px" className="mb-4" />
+        <SkeletonText width="320px" className="mb-6" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+          <div className="glass-surface p-6"><SkeletonText width="100%" /><SkeletonText width="60%" className="mt-2" /></div>
+          <div className="glass-surface p-6"><SkeletonText width="100%" /><SkeletonText width="60%" className="mt-2" /></div>
         </div>
       </div>
     );
@@ -80,12 +79,14 @@ const AgentDetails: React.FC = () => {
   if (error || !agent) {
     return (
       <div className="dashboard-container">
-        <button onClick={() => navigate('/agents')} className="btn btn-secondary mb-6 text-sm">
-          <ArrowLeft size={16} /> Back
+        <button onClick={() => navigate('/agents')} className="btn btn-secondary mb-6 text-xs">
+          <ArrowLeft size={14} />
+          <span>Back to Agents</span>
         </button>
-        <div className="empty-state">
-          <Shield size={48} className="empty-state-icon" />
-          <p>{error || 'Agent not found'}</p>
+        <div className="workspace-empty glass-surface p-8">
+          <Shield size={36} />
+          <strong>{error || 'Agent not found'}</strong>
+          <span>The requested agent profile could not be retrieved from the database.</span>
         </div>
       </div>
     );
@@ -93,121 +94,173 @@ const AgentDetails: React.FC = () => {
 
   return (
     <div className="dashboard-container">
-      <button onClick={() => navigate('/agents')} className="btn btn-secondary mb-6 text-sm">
-        <ArrowLeft size={16} /> Back to Agents
-      </button>
+      <div className="mb-4">
+        <button onClick={() => navigate('/agents')} className="btn btn-secondary text-xs">
+          <ArrowLeft size={14} />
+          <span>Back to Agents</span>
+        </button>
+      </div>
       
       <motion.div 
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-start justify-between mb-8 pb-6 border-b border-[var(--border-light)]"
-        style={{ borderBottom: '1px solid var(--border-light)' }}
+        className="glass-surface p-6 mb-6 flex items-center justify-between"
       >
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <h2 className="text-3xl font-medium m-0">{agent.name}</h2>
+            <h1 className="text-2xl font-bold m-0 text-primary">{agent.name}</h1>
             <Badge variant={agent.status === 'isolated' ? 'critical' : agent.status === 'active' ? 'safe' : 'default'}>
               {agent.status.toUpperCase()}
             </Badge>
           </div>
-          <div className="flex items-center gap-2 text-sm text-tertiary mono">
-            <Fingerprint size={14} /> ID: {agent.id}
+          <div className="flex items-center gap-2 text-xs text-tertiary mono">
+            <Fingerprint size={14} />
+            <span>ID: {agent.id}</span>
           </div>
         </div>
+
         <div>
           {agent.status === 'active' && (
             <button 
-              className="btn btn-danger flex items-center gap-2"
+              className="btn btn-danger"
               onClick={() => openModal('isolate')}
             >
-              <AlertTriangle size={16} /> Isolate Agent
+              <AlertTriangle size={15} />
+              <span>Isolate Agent</span>
             </button>
           )}
           {agent.status === 'isolated' && (
             <button 
-              className="btn btn-primary flex items-center gap-2 text-black"
-              style={{ color: '#000' }}
+              className="btn btn-primary btn-accent"
               onClick={() => openModal('restore')}
             >
-              <Shield size={16} /> Restore Agent
+              <Shield size={15} />
+              <span>Restore Agent</span>
             </button>
           )}
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
-        <SpotlightCard className="p-5 flex flex-col justify-between h-full" glowColor={agent.risk_score > 70 ? "rgba(239, 68, 68, 0.2)" : agent.risk_score > 30 ? "rgba(249, 115, 22, 0.2)" : "rgba(255, 255, 255, 0.1)"}>
+      {/* 4 Distinct Metric Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+        {/* Metric 1: Final Risk Score */}
+        <SpotlightCard 
+          className="p-5 flex flex-col justify-between" 
+          glowColor={agent.risk_score > 70 ? "rgba(244, 63, 94, 0.2)" : agent.risk_score > 30 ? "rgba(249, 115, 22, 0.2)" : "rgba(255, 255, 255, 0.08)"}
+        >
           <div className="flex items-center gap-2 mb-2">
-            <Activity size={16} className="text-secondary" />
-            <h3 className="text-xs font-medium text-tertiary uppercase tracking-wider m-0">Final Risk Score</h3>
+            <Activity size={15} className="text-tertiary" />
+            <span className="text-xs font-semibold text-tertiary uppercase tracking-wider">Final Risk Score</span>
           </div>
-          <div className={`text-3xl font-bold ${agent.risk_score > 70 ? 'text-critical' : agent.risk_score > 30 ? 'text-high' : 'text-primary'}`}>
+          <div className="mono font-bold" style={{ fontSize: '2rem', color: agent.risk_score > 70 ? 'var(--color-critical)' : agent.risk_score > 30 ? 'var(--color-high)' : 'var(--text-primary)' }}>
             {agent.risk_score.toFixed(2)}
           </div>
+          <span className="text-tertiary" style={{ fontSize: '0.7rem', marginTop: '0.4rem' }}>
+            Deterministic score (0.00 – 100.00)
+          </span>
         </SpotlightCard>
 
-        <SpotlightCard className="p-5 flex flex-col justify-between h-full">
+        {/* Metric 2: Semantic Similarity — Cosine Similarity */}
+        <SpotlightCard className="p-5 flex flex-col justify-between">
           <div className="flex items-center gap-2 mb-2">
-            <Fingerprint size={16} className="text-secondary" />
-            <h3 className="text-xs font-medium text-tertiary uppercase tracking-wider m-0">Semantic Similarity</h3>
+            <Sparkles size={15} className="text-tertiary" />
+            <span className="text-xs font-semibold text-tertiary uppercase tracking-wider">Semantic Similarity — Cosine Similarity</span>
           </div>
-          <div className={`text-2xl font-semibold ${agent.semantic_similarity === undefined ? 'text-tertiary' : 'text-primary'}`}>
+          <div className="mono font-bold" style={{ fontSize: '1.75rem', color: agent.semantic_similarity !== undefined ? 'var(--color-accent)' : 'var(--text-tertiary)' }}>
             {agent.semantic_similarity !== undefined ? agent.semantic_similarity.toFixed(4) : 'N/A'}
           </div>
+          <span className="text-tertiary" style={{ fontSize: '0.7rem', marginTop: '0.4rem' }}>
+            {agent.semantic_similarity !== undefined ? 'Calculated via vector embeddings' : 'Requires semantic detector telemetry'}
+          </span>
         </SpotlightCard>
 
-        <SpotlightCard className="p-5 flex flex-col justify-between h-full">
+        {/* Metric 3: Confidence */}
+        <SpotlightCard className="p-5 flex flex-col justify-between">
           <div className="flex items-center gap-2 mb-2">
-            <Activity size={16} className="text-secondary" />
-            <h3 className="text-xs font-medium text-tertiary uppercase tracking-wider m-0">Confidence</h3>
+            <Activity size={15} className="text-tertiary" />
+            <span className="text-xs font-semibold text-tertiary uppercase tracking-wider">Confidence</span>
           </div>
-          <div className={`text-2xl font-semibold ${agent.confidence === undefined ? 'text-tertiary' : 'text-primary'}`}>
+          <div className="mono font-bold" style={{ fontSize: '1.75rem', color: agent.confidence !== undefined ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>
             {agent.confidence !== undefined ? `${(agent.confidence * 100).toFixed(1)}%` : 'N/A'}
           </div>
+          <span className="text-tertiary" style={{ fontSize: '0.7rem', marginTop: '0.4rem' }}>
+            {agent.confidence !== undefined ? 'Statistical detection confidence' : 'No confidence score returned'}
+          </span>
         </SpotlightCard>
         
-        <SpotlightCard className="p-5 flex flex-col justify-between h-full">
+        {/* Metric 4: Detector Status */}
+        <SpotlightCard className="p-5 flex flex-col justify-between">
           <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle size={16} className="text-secondary" />
-            <h3 className="text-xs font-medium text-tertiary uppercase tracking-wider m-0">Detector Status</h3>
+            <AlertTriangle size={15} className="text-tertiary" />
+            <span className="text-xs font-semibold text-tertiary uppercase tracking-wider">Detector Status</span>
           </div>
-          <div className={`text-lg font-medium ${!agent.detector_status ? 'text-tertiary' : 'text-primary'}`}>
-            {agent.detector_status ? agent.detector_status : 'Unavailable'}
+          <div className="mono font-bold" style={{ fontSize: '1.35rem', color: agent.detector_status === 'AVAILABLE' ? 'var(--color-safe)' : agent.detector_status === 'UNAVAILABLE' ? 'var(--color-medium)' : 'var(--text-tertiary)' }}>
+            {agent.detector_status || 'Unavailable'}
           </div>
+          <span className="text-tertiary" style={{ fontSize: '0.7rem', marginTop: '0.4rem' }}>
+            Active detector state from backend
+          </span>
         </SpotlightCard>
       </div>
 
       <motion.div 
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
+        transition={{ delay: 0.15 }}
         className="glass-surface p-6 mb-8"
       >
-        <h3 className="text-lg font-medium flex items-center gap-2 mb-4 mt-0"><Clock size={18} /> System Information</h3>
-        <div className="flex items-center justify-between py-3 border-b border-[var(--border-light)]" style={{ borderBottom: '1px solid var(--border-light)' }}>
-          <span className="text-sm text-secondary">Registered At</span>
-          <span className="text-sm font-medium">{new Date(agent.created_at).toLocaleString()}</span>
+        <div className="workspace-section-heading">
+          <div>
+            <span className="workspace-eyebrow">METADATA AUDIT</span>
+            <h2 className="flex items-center gap-2 m-0 text-base">
+              <Clock size={16} />
+              <span>System &amp; Registration Information</span>
+            </h2>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between py-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          <span className="text-sm text-secondary">Created / Registered At</span>
+          <span className="text-sm font-medium text-primary mono">{new Date(agent.created_at).toLocaleString()}</span>
+        </div>
+        <div className="flex items-center justify-between py-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          <span className="text-sm text-secondary">Cryptographic Agent ID</span>
+          <span className="text-sm font-medium text-primary mono">{agent.id}</span>
+        </div>
+        <div className="flex items-center justify-between py-3">
+          <span className="text-sm text-secondary">Enforcement Boundary</span>
+          <Badge variant={agent.status === 'isolated' ? 'critical' : 'safe'}>
+            {agent.status === 'isolated' ? 'EGRESS BLOCKED · ISOLATED' : 'ACTIVE EGRESS POLICY'}
+          </Badge>
         </div>
       </motion.div>
 
       <Modal 
         isOpen={modalOpen} 
         onClose={() => !actionLoading && setModalOpen(false)} 
-        title={`Confirm ${modalAction === 'isolate' ? 'Isolation' : 'Restoration'}`}
+        title={`Confirm Agent ${modalAction === 'isolate' ? 'Isolation' : 'Restoration'}`}
         actions={
           <>
-            <button className="btn btn-secondary" onClick={() => setModalOpen(false)} disabled={actionLoading}>Cancel</button>
-            <button className={`btn ${modalAction === 'isolate' ? 'btn-danger' : 'btn-primary'}`} onClick={confirmAction} disabled={actionLoading}>
-              {actionLoading ? 'Processing...' : (modalAction === 'isolate' ? 'Isolate Agent' : 'Restore Agent')}
+            <button className="btn btn-secondary" onClick={() => setModalOpen(false)} disabled={actionLoading}>
+              Cancel
+            </button>
+            <button 
+              className={`btn ${modalAction === 'isolate' ? 'btn-danger' : 'btn-primary btn-accent'}`} 
+              onClick={confirmAction} 
+              disabled={actionLoading}
+            >
+              {actionLoading ? 'Processing...' : (modalAction === 'isolate' ? 'Confirm Isolation' : 'Confirm Restoration')}
             </button>
           </>
         }
       >
-        <p className="m-0 text-sm">Are you sure you want to {modalAction} <strong className="text-primary">{agent.name}</strong>?</p>
-        <p className="mt-2 text-sm text-tertiary m-0">
+        <p className="m-0 text-sm">
+          Are you sure you want to {modalAction} <strong className="text-primary">{agent.name}</strong>?
+        </p>
+        <p className="mt-2 text-tertiary m-0 text-xs leading-relaxed">
           {modalAction === 'isolate' 
-            ? 'This action will prevent the agent from performing protected operations.' 
-            : 'This action will allow the agent to perform protected operations again.'}
+            ? 'This action triggers immediate network and policy isolation, preventing the agent from performing any outbound operations or accessing protected resources.' 
+            : 'This action restores normal operational clearance and removes network confinement locks from the agent runtime.'}
         </p>
       </Modal>
     </div>

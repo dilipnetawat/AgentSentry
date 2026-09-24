@@ -30,19 +30,29 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, actions
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div 
+          className="modal-backdrop" 
+          onClick={onClose} 
+          role="dialog" 
+          aria-modal="true" 
+          aria-labelledby="modal-title"
+        >
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ duration: 0.2 }}
+            exit={{ opacity: 0, scale: 0.96, y: 12 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
             className="modal-content" 
             onClick={e => e.stopPropagation()}
           >
             <div className="modal-header">
               <h3 id="modal-title">{title}</h3>
-              <button className="modal-close" onClick={onClose} aria-label="Close modal">
-                <X size={20} />
+              <button 
+                className="modal-close" 
+                onClick={onClose} 
+                aria-label="Close modal"
+              >
+                <X size={18} />
               </button>
             </div>
             <div className="modal-body">

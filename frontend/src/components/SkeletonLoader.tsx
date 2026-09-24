@@ -1,20 +1,29 @@
 import React from 'react';
 
-export const SkeletonText: React.FC<{ width?: string, className?: string }> = ({ width = '100%', className = '' }) => (
-  <div className={`skeleton skeleton-text ${className}`} style={{ width, height: '1.2em' }}></div>
+export const SkeletonText: React.FC<{ width?: string; className?: string }> = ({ 
+  width = '100%', 
+  className = '' 
+}) => (
+  <div className={`skeleton ${className}`} style={{ width, height: '1.2em' }} />
 );
 
-export const SkeletonTitle: React.FC = () => (
-  <div className="skeleton skeleton-title"></div>
+export const SkeletonTitle: React.FC<{ width?: string; className?: string }> = ({ 
+  width = '40%', 
+  className = '' 
+}) => (
+  <div className={`skeleton skeleton-title ${className}`} style={{ width }} />
 );
 
-export const SkeletonMetric: React.FC = () => (
-  <div className="skeleton skeleton-metric"></div>
+export const SkeletonMetric: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <div className={`skeleton skeleton-metric ${className}`} />
 );
 
-export const SkeletonTable: React.FC<{ rows?: number, columns?: number }> = ({ rows = 5, columns = 4 }) => (
-  <div className="table-container border-0 rounded-none w-full">
-    <table className="data-table w-full">
+export const SkeletonTable: React.FC<{ rows?: number; columns?: number }> = ({ 
+  rows = 5, 
+  columns = 4 
+}) => (
+  <div className="table-container">
+    <table className="data-table">
       <thead>
         <tr>
           {Array.from({ length: columns }).map((_, i) => (
@@ -26,7 +35,7 @@ export const SkeletonTable: React.FC<{ rows?: number, columns?: number }> = ({ r
         {Array.from({ length: rows }).map((_, r) => (
           <tr key={r}>
             {Array.from({ length: columns }).map((_, c) => (
-              <td key={c}><SkeletonText width={Math.random() * 40 + 40 + '%'} /></td>
+              <td key={c}><SkeletonText width={`${Math.floor(Math.random() * 35) + 45}%`} /></td>
             ))}
           </tr>
         ))}
