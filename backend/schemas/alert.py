@@ -11,3 +11,6 @@ class AlertResponse(BaseModel):
     severity: str
     status: str
     created_at: datetime
+
+class AlertStatusUpdate(BaseModel):
+    status: str

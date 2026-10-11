@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>/ — graphify tree viewer</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f9f9f9;
+      color: #333;
+    }
+    h1 {
+      margin: 20px 0 0 24px;
+      font-size: 2.2rem;
+      font-weight: bold;
+      color: #1e3a56;
+    }
+    .controls {
+      margin: 20px 0 15px 24px;
+    }
+    button {
+      margin-right: 10px;
+      padding: 8px 18px;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s ease-in-out;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    button:active {
+      background: #004085;
+    }
+    #tree-container {
+      width: calc(100vw - 48px); /* Adjust for body margin/padding */
+      height: 85vh;
+      overflow: auto;
+      border-radius: 8px;
+      background: #fff;
+      margin-left: 24px;
+      margin-right: 24px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      border: 1px solid #ddd;
+    }
+    svg {
+      background: #fff;
+      border-radius: 8px;
+      display: block; /* Important for D3 */
+    }
+    .node circle {
+      stroke-width: 2.5px;
+    }
+    .node text { /* Base style for the <text> container */
+      font: 13px 'Segoe UI', sans-serif;
+      paint-order: stroke fill; /* Ensures text is readable over lines */
+      stroke: #fff; /* White halo */
+      stroke-width: 3px; /* Halo thickness */
+      stroke-linejoin: round;
+      stroke-opacity: 0.85; /* Halo opacity */
+    }
+    .link {
+      fill: none;
+      stroke-opacity: 0.7;
+      stroke-width: 2px;
+    }
+  </style>
+</head>
+<body>
+  <h1>/ — Knowledge Graph</h1>
+  <div class="controls">
+    <button onclick="expandAll()">Expand All</button>
+    <button onclick="collapseAll()">Collapse All</button>
+    <button onclick="resetView()">Reset View</button>
+  </div>
+  <div id="tree-container">
+    <svg id="tree-svg" width="6000" height="8000"></svg>
+  </div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    const initialJsonData = {"name":"/","total_count":422,"children":[{"name":"alembic","total_count":21,"children":[{"name":"env.py","total_count":7,"children":[{"name":"do_run_migrations()","total_count":1,"children":[]},{"name":"In this scenario we need to create an Engine and associate a connection with\u2026","total_count":1,"children":[]},{"name":"Run migrations in 'offline' mode. This configures the context with just a URL\u2026","total_count":1,"children":[]},{"name":"Run migrations in 'online' mode.","total_count":1,"children":[]},{"name":"run_async_migrations()","total_count":1,"children":[]},{"name":"run_migrations_offline()","total_count":1,"children":[]},{"name":"run_migrations_online()","total_count":1,"children":[]}]},{"name":"versions","total_count":14,"children":[{"name":"514a51b333c1_init_firewall_and_securityevents.py","total_count":2,"children":[{"name":"downgrade()","total_count":1,"children":[]},{"name":"upgrade()","total_count":1,"children":[]}]},{"name":"5374b539797d_init_agent_model.py","total_count":2,"children":[{"name":"downgrade()","total_count":1,"children":[]},{"name":"upgrade()","total_count":1,"children":[]}]},{"name":"91791f42b1f4_phase3_honeytoken_mesh.py","total_count":2,"children":[{"name":"downgrade()","total_count":1,"children":[]},{"name":"upgrade()","total_count":1,"children":[]}]},{"name":"c33277276d7b_init_honeytoken_model.py","total_count":2,"children":[{"name":"downgrade()","total_count":1,"children":[]},{"name":"upgrade()","total_count":1,"children":[]}]},{"name":"c8eea161c9b7_init_ingestion_model.py","total_count":2,"children":[{"name":"downgrade()","total_count":1,"children":[]},{"name":"upgrade()","total_count":1,"children":[]}]},{"name":"de163b74e023_add_alert_model.py","total_count":2,"children":[{"name":"downgrade()","total_count":1,"children":[]},{"name":"upgrade()","total_count":1,"children":[]}]},{"name":"f4617f37c12f_phase4_auth.py","total_count":2,"children":[{"name":"downgrade()","total_count":1,"children":[]},{"name":"upgrade()","total_count":1,"children":[]}]}]}]},{"name":"backend","total_count":213,"children":[{"name":"api","total_count":51,"children":[{"name":"deps.py","total_count":8,"children":[{"name":"Dependency to check if current user has required role.","total_count":1,"children":[]},{"name":"Double Submit Cookie pattern for CSRF protection. The frontend reads the\u2026","total_count":1,"children":[]},{"name":"get_admin_user()","total_count":1,"children":[]},{"name":"get_analyst_user()","total_count":1,"children":[]},{"name":"get_current_user()","total_count":1,"children":[]},{"name":"require_role()","total_count":1,"children":[]},{"name":"role_checker()","total_count":1,"children":[]},{"name":"verify_csrf_token()","total_count":1,"children":[]}]},{"name":"routers","total_count":43,"children":[{"name":"agent_runtime.py","total_count":9,"children":[{"name":"Constructs the context available to the agent and genuinely injects active\u2026","total_count":1,"children":[]},{"name":"ContextResponse","total_count":1,"children":[]},{"name":"Egress Enforcement Gateway. Scans outbound payload. A safe request may be\u2026","total_count":1,"children":[]},{"name":"egress_enforcement_gateway()","total_count":1,"children":[]},{"name":"EgressRequest","total_count":1,"children":[]},{"name":"EgressResponse","total_count":1,"children":[]},{"name":"get_agent_context()","total_count":1,"children":[]},{"name":"Raise 404 to prevent IDOR if not owner or admin","total_count":1,"children":[]},{"name":"verify_agent_ownership()","total_count":1,"children":[]}]},{"name":"agents.py","total_count":11,"children":[{"name":"get_agent()","total_count":1,"children":[]},{"name":"Isolate an agent. Requires Admin or Analyst role.","total_count":1,"children":[]},{"name":"isolate_agent()","total_count":1,"children":[]},{"name":"List agents. Admins see all, others see their own.","total_count":1,"children":[]},{"name":"list_agents()","total_count":1,"children":[]},{"name":"Raise 404 to prevent IDOR if not owner or admin","total_count":1,"children":[]},{"name":"Register a new AI agent.","total_count":1,"children":[]},{"name":"register_agent()","total_count":1,"children":[]},{"name":"Restore an isolated agent. Requires Admin or Analyst role.","total_count":1,"children":[]},{"name":"restore_agent()","total_count":1,"children":[]},{"name":"verify_agent_ownership()","total_count":1,"children":[]}]},{"name":"alerts.py","total_count":1,"children":[{"name":"list_alerts()","total_count":1,"children":[]}]},{"name":"auth.py","total_count":8,"children":[{"name":"_auth_cookie_flags()","total_count":1,"children":[]},{"name":"create_access_token()","total_count":1,"children":[]},{"name":"HttpOnly JWT stays HttpOnly. Secure/SameSite follow the environment. Local HTTP\u2026","total_count":1,"children":[]},{"name":"login()","total_count":1,"children":[]},{"name":"LoginRequest","total_count":1,"children":[]},{"name":"logout()","total_count":1,"children":[]},{"name":"read_users_me()","total_count":1,"children":[]},{"name":"UserResponse","total_count":1,"children":[]}]},{"name":"dashboard.py","total_count":1,"children":[{"name":"get_dashboard_stats()","total_count":1,"children":[]}]},{"name":"demo.py","total_count":2,"children":[{"name":"Remove only the current user's explicitly marked guided-demo resources.","total_count":1,"children":[]},{"name":"reset_demo()","total_count":1,"children":[]}]},{"name":"honeytokens.py","total_count":6,"children":[{"name":"create_honeytoken()","total_count":1,"children":[]},{"name":"Generate a new secure HoneyToken for a specific agent. Requires Admin role.","total_count":1,"children":[]},{"name":"List all HoneyTokens (redacted).","total_count":1,"children":[]},{"name":"list_honeytokens()","total_count":1,"children":[]},{"name":"Rotate an agent's HoneyToken for a given scope. Revokes old token and generates\u2026","total_count":1,"children":[]},{"name":"rotate_honeytoken()","total_count":1,"children":[]}]},{"name":"ingestion.py","total_count":4,"children":[{"name":"Ingest untrusted content for analysis. Validates input size, structure, and\u2026","total_count":1,"children":[]},{"name":"ingest_content()","total_count":1,"children":[]},{"name":"Raise 404 to prevent IDOR if not owner or admin","total_count":1,"children":[]},{"name":"verify_agent_ownership()","total_count":1,"children":[]}]},{"name":"security_events.py","total_count":1,"children":[{"name":"list_security_events()","total_count":1,"children":[]}]}]}]},{"name":"database.py","total_count":1,"children":[{"name":"get_db()","total_count":1,"children":[]}]},{"name":"demo_scenario.py","total_count":1,"children":[{"name":"main()","total_count":1,"children":[]}]},{"name":"main.py","total_count":5,"children":[{"name":"add_security_headers()","total_count":1,"children":[]},{"name":"Basic health check endpoint","total_count":1,"children":[]},{"name":"global_exception_handler()","total_count":1,"children":[]},{"name":"health_check()","total_count":1,"children":[]},{"name":"limit_request_size()","total_count":1,"children":[]}]},{"name":"models","total_count":7,"children":[{"name":"agent.py","total_count":1,"children":[{"name":"Agent","total_count":1,"children":[]}]},{"name":"alert.py","total_count":1,"children":[{"name":"Alert","total_count":1,"children":[]}]},{"name":"audit_log.py","total_count":1,"children":[{"name":"AuditLog","total_count":1,"children":[]}]},{"name":"honeytoken.py","total_count":1,"children":[{"name":"HoneyToken","total_count":1,"children":[]}]},{"name":"ingestion.py","total_count":1,"children":[{"name":"IngestionRecord","total_count":1,"children":[]}]},{"name":"security_event.py","total_count":1,"children":[{"name":"SecurityEvent","total_count":1,"children":[]}]},{"name":"user.py","total_count":1,"children":[{"name":"User","total_count":1,"children":[]}]}]},{"name":"schemas","total_count":11,"children":[{"name":"agent.py","total_count":3,"children":[{"name":"AgentBase","total_count":1,"children":[]},{"name":"AgentCreate","total_count":1,"children":[]},{"name":"AgentResponse","total_count":1,"children":[]}]},{"name":"alert.py","total_count":1,"children":[{"name":"AlertResponse","total_count":1,"children":[]}]},{"name":"dashboard.py","total_count":1,"children":[{"name":"DashboardStats","total_count":1,"children":[]}]},{"name":"honeytoken.py","total_count":3,"children":[{"name":"HoneyTokenBase","total_count":1,"children":[]},{"name":"HoneyTokenRequest","total_count":1,"children":[]},{"name":"HoneyTokenResponse","total_count":1,"children":[]}]},{"name":"ingestion.py","total_count":2,"children":[{"name":"IngestionRequest","total_count":1,"children":[]},{"name":"IngestionResponse","total_count":1,"children":[]}]},{"name":"security_event.py","total_count":1,"children":[{"name":"SecurityEventResponse","total_count":1,"children":[]}]}]},{"name":"seed_admin.py","total_count":3,"children":[{"name":"hash_password()","total_count":1,"children":[]},{"name":"seed_admin()","total_count":1,"children":[]},{"name":"seed_user()","total_count":1,"children":[]}]},{"name":"services","total_count":45,"children":[{"name":"alert_service.py","total_count":3,"children":[{"name":".generate_alert_from_event()","total_count":1,"children":[]},{"name":"AlertService","total_count":1,"children":[]},{"name":"Creates an actionable Alert from an immutable SecurityEvent. Generates alerts\u2026","total_count":1,"children":[]}]},{"name":"firewall","total_count":33,"children":[{"name":"aggregator.py","total_count":3,"children":[{"name":".aggregate()","total_count":1,"children":[]},{"name":"RiskAggregator","total_count":1,"children":[]},{"name":"Takes results from multiple detectors and aggregates them deterministically.\u2026","total_count":1,"children":[]}]},{"name":"detectors.py","total_count":5,"children":[{"name":".__init__()","total_count":1,"children":[]},{"name":"._normalize()","total_count":1,"children":[]},{"name":".analyze()","total_count":1,"children":[]},{"name":".detector_type()","total_count":1,"children":[]},{"name":"RuleBasedDetector","total_count":1,"children":[]}]},{"name":"interfaces.py","total_count":11,"children":[{"name":".analyze()","total_count":1,"children":[]},{"name":".detector_type()","total_count":1,"children":[]},{"name":".detector_type()","total_count":1,"children":[]},{"name":".name()","total_count":1,"children":[]},{"name":"Analyze the content and return a DetectionResult.","total_count":1,"children":[]},{"name":"Base interface specifically for semantic detectors (Embeddings, ML, LLM).\u2026","total_count":1,"children":[]},{"name":"DetectorInterface","total_count":1,"children":[]},{"name":"Name of the detector.","total_count":1,"children":[]},{"name":"Pluggable interface for semantic firewall detectors. Implementations could be\u2026","total_count":1,"children":[]},{"name":"SemanticDetectorInterface","total_count":1,"children":[]},{"name":"Type of the detector (e.g., rule_based, semantic).","total_count":1,"children":[]}]},{"name":"models.py","total_count":2,"children":[{"name":"DetectionResult","total_count":1,"children":[]},{"name":"FirewallDecision","total_count":1,"children":[]}]},{"name":"pipeline.py","total_count":3,"children":[{"name":".__init__()","total_count":1,"children":[]},{"name":".analyze()","total_count":1,"children":[]},{"name":"SemanticFirewall","total_count":1,"children":[]}]},{"name":"policy.py","total_count":2,"children":[{"name":".evaluate()","total_count":1,"children":[]},{"name":"PolicyEngine","total_count":1,"children":[]}]},{"name":"semantic_detector.py","total_count":7,"children":[{"name":".__init__()","total_count":1,"children":[]},{"name":"._initialize_model()","total_count":1,"children":[]},{"name":".analyze()","total_count":1,"children":[]},{"name":".cosine_similarity()","total_count":1,"children":[]},{"name":".detector_type()","total_count":1,"children":[]},{"name":".name()","total_count":1,"children":[]},{"name":"SemanticSimilarityDetector","total_count":1,"children":[]}]}]},{"name":"honeytoken_service.py","total_count":9,"children":[{"name":".create_honeytoken()","total_count":1,"children":[]},{"name":".detect_triggers()","total_count":1,"children":[]},{"name":".generate_token_value()","total_count":1,"children":[]},{"name":".rotate_honeytoken()","total_count":1,"children":[]},{"name":"Creates a new HoneyToken for the given agent. Validates agent existence.","total_count":1,"children":[]},{"name":"Generates a cryptographically secure random token value. Uses secrets module\u2026","total_count":1,"children":[]},{"name":"HoneyTokenService","total_count":1,"children":[]},{"name":"Revokes the active HoneyToken for a given scope and agent, and generates a new\u2026","total_count":1,"children":[]},{"name":"Scans content for HoneyTokens belonging to the agent. If found, marks\u2026","total_count":1,"children":[]}]}]},{"name":"tests","total_count":89,"children":[{"name":"conftest.py","total_count":11,"children":[{"name":"_get_auth_client()","total_count":1,"children":[]},{"name":"admin_client()","total_count":1,"children":[]},{"name":"admin_user()","total_count":1,"children":[]},{"name":"analyst_client()","total_count":1,"children":[]},{"name":"analyst_user()","total_count":1,"children":[]},{"name":"async_client()","total_count":1,"children":[]},{"name":"db_session()","total_count":1,"children":[]},{"name":"hash_password()","total_count":1,"children":[]},{"name":"override_get_db()","total_count":1,"children":[]},{"name":"setup_db()","total_count":1,"children":[]},{"name":"unauth_client()","total_count":1,"children":[]}]},{"name":"test_agents.py","total_count":9,"children":[{"name":"test_agent_isolation_and_restore()","total_count":1,"children":[]},{"name":"test_agent_not_found()","total_count":1,"children":[]},{"name":"test_agent_registration()","total_count":1,"children":[]},{"name":"test_invalid_agent_data()","total_count":1,"children":[]},{"name":"test_isolate_already_isolated_agent()","total_count":1,"children":[]},{"name":"test_isolate_invalid_uuid()","total_count":1,"children":[]},{"name":"test_isolate_nonexistent_agent()","total_count":1,"children":[]},{"name":"test_isolation_does_not_affect_unrelated_agents()","total_count":1,"children":[]},{"name":"test_list_agents()","total_count":1,"children":[]}]},{"name":"test_alerts.py","total_count":2,"children":[{"name":"test_alert_generation_from_firewall()","total_count":1,"children":[]},{"name":"test_alert_generation_from_honeytoken()","total_count":1,"children":[]}]},{"name":"test_dashboard_api.py","total_count":5,"children":[{"name":"test_dashboard_stats_empty()","total_count":1,"children":[]},{"name":"test_dashboard_stats_honeytoken()","total_count":1,"children":[]},{"name":"test_dashboard_stats_populated()","total_count":1,"children":[]},{"name":"test_list_alerts()","total_count":1,"children":[]},{"name":"test_list_security_events()","total_count":1,"children":[]}]},{"name":"test_e2e_security_lifecycle.py","total_count":3,"children":[{"name":"make_payload()","total_count":1,"children":[]},{"name":"test_e2e_edge_cases()","total_count":1,"children":[]},{"name":"test_e2e_security_lifecycle()","total_count":1,"children":[]}]},{"name":"test_firewall.py","total_count":5,"children":[{"name":"analyze()","total_count":1,"children":[]},{"name":"test_firewall_allow()","total_count":1,"children":[]},{"name":"test_firewall_block()","total_count":1,"children":[]},{"name":"test_firewall_detector_failure()","total_count":1,"children":[]},{"name":"test_firewall_quarantine()","total_count":1,"children":[]}]},{"name":"test_fix_pass.py","total_count":8,"children":[{"name":"test_admin_login()","total_count":1,"children":[]},{"name":"test_agents_pagination()","total_count":1,"children":[]},{"name":"test_analyst_login()","total_count":1,"children":[]},{"name":"test_cors_allows_localhost_frontend()","total_count":1,"children":[]},{"name":"test_dashboard_response_correctness()","total_count":1,"children":[]},{"name":"test_idempotent_seed()","total_count":1,"children":[]},{"name":"test_login_sets_secure_cookies_in_production()","total_count":1,"children":[]},{"name":"test_rbac_admin_vs_analyst()","total_count":1,"children":[]}]},{"name":"test_honeytoken_mesh.py","total_count":1,"children":[{"name":"test_honeytoken_mesh_lifecycle()","total_count":1,"children":[]}]},{"name":"test_honeytokens.py","total_count":5,"children":[{"name":"test_create_honeytoken_invalid_agent()","total_count":1,"children":[]},{"name":"test_create_honeytoken_success()","total_count":1,"children":[]},{"name":"test_detect_honeytoken_trigger()","total_count":1,"children":[]},{"name":"test_honeytoken_uniqueness()","total_count":1,"children":[]},{"name":"test_trigger_detection_edge_cases()","total_count":1,"children":[]}]},{"name":"test_ingestion.py","total_count":5,"children":[{"name":"test_ingest_content_invalid_agent()","total_count":1,"children":[]},{"name":"test_ingest_content_isolated_agent()","total_count":1,"children":[]},{"name":"test_ingest_content_oversized()","total_count":1,"children":[]},{"name":"test_ingest_content_success()","total_count":1,"children":[]},{"name":"test_ingest_content_validation()","total_count":1,"children":[]}]},{"name":"test_risk_and_policy.py","total_count":7,"children":[{"name":"test_policy_engine_boundaries()","total_count":1,"children":[]},{"name":"test_risk_aggregator_empty()","total_count":1,"children":[]},{"name":"test_risk_aggregator_failure_ignored()","total_count":1,"children":[]},{"name":"test_risk_aggregator_multiple_detectors()","total_count":1,"children":[]},{"name":"test_risk_aggregator_one_detector()","total_count":1,"children":[]},{"name":"test_risk_aggregator_safe_content()","total_count":1,"children":[]},{"name":"test_risk_aggregator_score_capped_at_100()","total_count":1,"children":[]}]},{"name":"test_rule_detector.py","total_count":15,"children":[{"name":"detector()","total_count":1,"children":[]},{"name":"test_10_false_positive_examples()","total_count":1,"children":[]},{"name":"test_11_empty_input()","total_count":1,"children":[]},{"name":"test_12_very_long_input()","total_count":1,"children":[]},{"name":"test_13_multiple_attack_categories()","total_count":1,"children":[]},{"name":"test_14_score_remains_0_100()","total_count":1,"children":[]},{"name":"test_1_safe_legitimate_text()","total_count":1,"children":[]},{"name":"test_2_ignore_previous_instructions()","total_count":1,"children":[]},{"name":"test_3_system_prompt_extraction()","total_count":1,"children":[]},{"name":"test_4_role_manipulation()","total_count":1,"children":[]},{"name":"test_5_data_exfiltration()","total_count":1,"children":[]},{"name":"test_6_dangerous_tool_execution()","total_count":1,"children":[]},{"name":"test_7_mixed_malicious_indicators()","total_count":1,"children":[]},{"name":"test_8_case_variations()","total_count":1,"children":[]},{"name":"test_9_extra_whitespace()","total_count":1,"children":[]}]},{"name":"test_semantic_detector.py","total_count":7,"children":[{"name":"detector()","total_count":1,"children":[]},{"name":"test_semantic_calibration()","total_count":1,"children":[]},{"name":"test_semantic_detector_data_exfiltration()","total_count":1,"children":[]},{"name":"test_semantic_detector_initialization()","total_count":1,"children":[]},{"name":"test_semantic_detector_instruction_override()","total_count":1,"children":[]},{"name":"test_semantic_detector_safe_content()","total_count":1,"children":[]},{"name":"Utility test to print similarities of safe vs unsafe text to help calibrate the\u2026","total_count":1,"children":[]}]},{"name":"test_semantic_interface.py","total_count":6,"children":[{"name":".analyze()","total_count":1,"children":[]},{"name":".name()","total_count":1,"children":[]},{"name":"analyze()","total_count":1,"children":[]},{"name":"MockMLDetector","total_count":1,"children":[]},{"name":"test_semantic_firewall_dependency_injection()","total_count":1,"children":[]},{"name":"test_semantic_interface_stub()","total_count":1,"children":[]}]}]}]},{"name":"frontend","total_count":174,"children":[{"name":".oxlintrc.json","total_count":5,"children":[{"name":"$schema","total_count":1,"children":[]},{"name":"plugins","total_count":1,"children":[]},{"name":"react/only-export-components","total_count":1,"children":[]},{"name":"react/rules-of-hooks","total_count":1,"children":[]},{"name":"rules","total_count":1,"children":[]}]},{"name":"package.json","total_count":37,"children":[{"name":"@splinetool/runtime","total_count":1,"children":[]},{"name":"@splinetool/runtime","total_count":1,"children":[]},{"name":"@types/node","total_count":1,"children":[]},{"name":"@types/node","total_count":1,"children":[]},{"name":"@types/react","total_count":1,"children":[]},{"name":"@types/react","total_count":1,"children":[]},{"name":"@types/react-dom","total_count":1,"children":[]},{"name":"@types/react-dom","total_count":1,"children":[]},{"name":"@vitejs/plugin-react","total_count":1,"children":[]},{"name":"@vitejs/plugin-react","total_count":1,"children":[]},{"name":"build","total_count":1,"children":[]},{"name":"dependencies","total_count":1,"children":[]},{"name":"dev","total_count":1,"children":[]},{"name":"devDependencies","total_count":1,"children":[]},{"name":"framer-motion","total_count":1,"children":[]},{"name":"framer-motion","total_count":1,"children":[]},{"name":"lint","total_count":1,"children":[]},{"name":"lucide-react","total_count":1,"children":[]},{"name":"lucide-react","total_count":1,"children":[]},{"name":"name","total_count":1,"children":[]},{"name":"oxlint","total_count":1,"children":[]},{"name":"oxlint","total_count":1,"children":[]},{"name":"preview","total_count":1,"children":[]},{"name":"private","total_count":1,"children":[]},{"name":"react","total_count":1,"children":[]},{"name":"react","total_count":1,"children":[]},{"name":"react-dom","total_count":1,"children":[]},{"name":"react-dom","total_count":1,"children":[]},{"name":"react-router-dom","total_count":1,"children":[]},{"name":"react-router-dom","total_count":1,"children":[]},{"name":"scripts","total_count":1,"children":[]},{"name":"type","total_count":1,"children":[]},{"name":"typescript","total_count":1,"children":[]},{"name":"typescript","total_count":1,"children":[]},{"name":"version","total_count":1,"children":[]},{"name":"vite","total_count":1,"children":[]},{"name":"vite","total_count":1,"children":[]}]},{"name":"src","total_count":91,"children":[{"name":"App.tsx","total_count":1,"children":[{"name":"App()","total_count":1,"children":[]}]},{"name":"components","total_count":32,"children":[{"name":"AppShell.tsx","total_count":2,"children":[{"name":"AppShell()","total_count":1,"children":[]},{"name":"AppShellProps","total_count":1,"children":[]}]},{"name":"Badge.tsx","total_count":3,"children":[{"name":"Badge()","total_count":1,"children":[]},{"name":"BadgeProps","total_count":1,"children":[]},{"name":"BadgeVariant","total_count":1,"children":[]}]},{"name":"GridBackground.tsx","total_count":1,"children":[{"name":"GridBackground()","total_count":1,"children":[]}]},{"name":"GuidedDemo.tsx","total_count":11,"children":[{"name":"architectureStages","total_count":1,"children":[]},{"name":"DemoRun","total_count":1,"children":[]},{"name":"detectorDetails()","total_count":1,"children":[]},{"name":"getErrorStatus()","total_count":1,"children":[]},{"name":"GuidedDemo()","total_count":1,"children":[]},{"name":"PipelineStep","total_count":1,"children":[]},{"name":"Scenario","total_count":1,"children":[]},{"name":"scenarioCopy","total_count":1,"children":[]},{"name":"stateToIconClass()","total_count":1,"children":[]},{"name":"stateToVariant()","total_count":1,"children":[]},{"name":"StepState","total_count":1,"children":[]}]},{"name":"Modal.tsx","total_count":2,"children":[{"name":"Modal()","total_count":1,"children":[]},{"name":"ModalProps","total_count":1,"children":[]}]},{"name":"PageHeader.tsx","total_count":2,"children":[{"name":"PageHeader()","total_count":1,"children":[]},{"name":"PageHeaderProps","total_count":1,"children":[]}]},{"name":"ProtectedRoute.tsx","total_count":2,"children":[{"name":"ProtectedRoute()","total_count":1,"children":[]},{"name":"ProtectedRouteProps","total_count":1,"children":[]}]},{"name":"Sidebar.tsx","total_count":1,"children":[{"name":"Sidebar()","total_count":1,"children":[]}]},{"name":"SkeletonLoader.tsx","total_count":4,"children":[{"name":"SkeletonMetric()","total_count":1,"children":[]},{"name":"SkeletonTable()","total_count":1,"children":[]},{"name":"SkeletonText()","total_count":1,"children":[]},{"name":"SkeletonTitle()","total_count":1,"children":[]}]},{"name":"SpotlightCard.tsx","total_count":2,"children":[{"name":"SpotlightCard()","total_count":1,"children":[]},{"name":"SpotlightCardProps","total_count":1,"children":[]}]},{"name":"TopNav.tsx","total_count":1,"children":[{"name":"TopNav()","total_count":1,"children":[]}]},{"name":"TornadoBackground.tsx","total_count":1,"children":[{"name":"TornadoBackground()","total_count":1,"children":[]}]}]},{"name":"contexts","total_count":11,"children":[{"name":"AuthContext.tsx","total_count":5,"children":[{"name":"AuthContext","total_count":1,"children":[]},{"name":"AuthContextType","total_count":1,"children":[]},{"name":"AuthProvider()","total_count":1,"children":[]},{"name":"useAuth()","total_count":1,"children":[]},{"name":"User","total_count":1,"children":[]}]},{"name":"ToastContext.tsx","total_count":6,"children":[{"name":"Toast","total_count":1,"children":[]},{"name":"ToastContext","total_count":1,"children":[]},{"name":"ToastContextType","total_count":1,"children":[]},{"name":"ToastProvider()","total_count":1,"children":[]},{"name":"ToastType","total_count":1,"children":[]},{"name":"useToast()","total_count":1,"children":[]}]}]},{"name":"pages","total_count":15,"children":[{"name":"AccessDenied.tsx","total_count":1,"children":[{"name":"AccessDenied()","total_count":1,"children":[]}]},{"name":"AgentDetails.tsx","total_count":1,"children":[{"name":"AgentDetails()","total_count":1,"children":[]}]},{"name":"Agents.tsx","total_count":1,"children":[{"name":"Agents()","total_count":1,"children":[]}]},{"name":"Alerts.tsx","total_count":2,"children":[{"name":"Alerts()","total_count":1,"children":[]},{"name":"getSeverityVariant()","total_count":1,"children":[]}]},{"name":"Dashboard.tsx","total_count":5,"children":[{"name":"Dashboard()","total_count":1,"children":[]},{"name":"eventLabel()","total_count":1,"children":[]},{"name":"getTimeAgo()","total_count":1,"children":[]},{"name":"metricCards()","total_count":1,"children":[]},{"name":"parseEventMetadata()","total_count":1,"children":[]}]},{"name":"Events.tsx","total_count":2,"children":[{"name":"Events()","total_count":1,"children":[]},{"name":"getSeverityVariant()","total_count":1,"children":[]}]},{"name":"HoneyTokens.tsx","total_count":1,"children":[{"name":"HoneyTokens()","total_count":1,"children":[]}]},{"name":"Login.tsx","total_count":1,"children":[{"name":"Login()","total_count":1,"children":[]}]},{"name":"NotFound.tsx","total_count":1,"children":[{"name":"NotFound()","total_count":1,"children":[]}]}]},{"name":"services","total_count":31,"children":[{"name":"api.ts","total_count":31,"children":[{"name":"Agent","total_count":1,"children":[]},{"name":"Alert","total_count":1,"children":[]},{"name":"apiFetch()","total_count":1,"children":[]},{"name":"ApiFetchOptions","total_count":1,"children":[]},{"name":"ContextResult","total_count":1,"children":[]},{"name":"createAgent()","total_count":1,"children":[]},{"name":"createHoneyToken()","total_count":1,"children":[]},{"name":"DashboardStats","total_count":1,"children":[]},{"name":"EgressResult","total_count":1,"children":[]},{"name":"fetchAgentAlerts()","total_count":1,"children":[]},{"name":"fetchAgentContext()","total_count":1,"children":[]},{"name":"fetchAgentDetails()","total_count":1,"children":[]},{"name":"fetchAgentEvents()","total_count":1,"children":[]},{"name":"fetchAllAlerts()","total_count":1,"children":[]},{"name":"fetchAllEvents()","total_count":1,"children":[]},{"name":"fetchCurrentUser()","total_count":1,"children":[]},{"name":"fetchDashboardStats()","total_count":1,"children":[]},{"name":"fetchHoneyTokens()","total_count":1,"children":[]},{"name":"fetchRecentAgents()","total_count":1,"children":[]},{"name":"fetchRecentAlerts()","total_count":1,"children":[]},{"name":"fetchRecentEvents()","total_count":1,"children":[]},{"name":"getCookie()","total_count":1,"children":[]},{"name":"HoneyToken","total_count":1,"children":[]},{"name":"ingestDemoContent()","total_count":1,"children":[]},{"name":"IngestionResult","total_count":1,"children":[]},{"name":"isolateAgent()","total_count":1,"children":[]},{"name":"resetGuidedDemo()","total_count":1,"children":[]},{"name":"restoreAgent()","total_count":1,"children":[]},{"name":"rotateHoneyToken()","total_count":1,"children":[]},{"name":"SecurityEvent","total_count":1,"children":[]},{"name":"submitEgress()","total_count":1,"children":[]}]}]},{"name":"main.tsx","total_count":1,"children":[]}]},{"name":"tsconfig.app.json","total_count":19,"children":[{"name":"allowArbitraryExtensions","total_count":1,"children":[]},{"name":"allowImportingTsExtensions","total_count":1,"children":[]},{"name":"compilerOptions","total_count":1,"children":[]},{"name":"erasableSyntaxOnly","total_count":1,"children":[]},{"name":"include","total_count":1,"children":[]},{"name":"jsx","total_count":1,"children":[]},{"name":"lib","total_count":1,"children":[]},{"name":"module","total_count":1,"children":[]},{"name":"moduleDetection","total_count":1,"children":[]},{"name":"moduleResolution","total_count":1,"children":[]},{"name":"noEmit","total_count":1,"children":[]},{"name":"noFallthroughCasesInSwitch","total_count":1,"children":[]},{"name":"noUnusedLocals","total_count":1,"children":[]},{"name":"noUnusedParameters","total_count":1,"children":[]},{"name":"skipLibCheck","total_count":1,"children":[]},{"name":"target","total_count":1,"children":[]},{"name":"tsBuildInfoFile","total_count":1,"children":[]},{"name":"types","total_count":1,"children":[]},{"name":"verbatimModuleSyntax","total_count":1,"children":[]}]},{"name":"tsconfig.json","total_count":2,"children":[{"name":"files","total_count":1,"children":[]},{"name":"references","total_count":1,"children":[]}]},{"name":"tsconfig.node.json","total_count":16,"children":[{"name":"allowImportingTsExtensions","total_count":1,"children":[]},{"name":"compilerOptions","total_count":1,"children":[]},{"name":"erasableSyntaxOnly","total_count":1,"children":[]},{"name":"include","total_count":1,"children":[]},{"name":"lib","total_count":1,"children":[]},{"name":"module","total_count":1,"children":[]},{"name":"moduleDetection","total_count":1,"children":[]},{"name":"noEmit","total_count":1,"children":[]},{"name":"noFallthroughCasesInSwitch","total_count":1,"children":[]},{"name":"noUnusedLocals","total_count":1,"children":[]},{"name":"noUnusedParameters","total_count":1,"children":[]},{"name":"skipLibCheck","total_count":1,"children":[]},{"name":"target","total_count":1,"children":[]},{"name":"tsBuildInfoFile","total_count":1,"children":[]},{"name":"types","total_count":1,"children":[]},{"name":"verbatimModuleSyntax","total_count":1,"children":[]}]},{"name":"vercel.json","total_count":3,"children":[{"name":"buildCommand","total_count":1,"children":[]},{"name":"outputDirectory","total_count":1,"children":[]},{"name":"rewrites","total_count":1,"children":[]}]},{"name":"vite.config.ts","total_count":1,"children":[]}]},{"name":"package.json","total_count":6,"children":[{"name":"dev","total_count":1,"children":[]},{"name":"dev:backend","total_count":1,"children":[]},{"name":"dev:frontend","total_count":1,"children":[]},{"name":"name","total_count":1,"children":[]},{"name":"private","total_count":1,"children":[]},{"name":"scripts","total_count":1,"children":[]}]},{"name":"scratch","total_count":1,"children":[{"name":"seed.py","total_count":1,"children":[{"name":"seed()","total_count":1,"children":[]}]}]},{"name":"scripts","total_count":7,"children":[{"name":"dev.mjs","total_count":7,"children":[{"name":"portInUse()","total_count":1,"children":[]},{"name":"python","total_count":1,"children":[]},{"name":"resolvePython()","total_count":1,"children":[]},{"name":"root","total_count":1,"children":[]},{"name":"shutdown()","total_count":1,"children":[]},{"name":"spawnInherit()","total_count":1,"children":[]},{"name":"waitForHealth()","total_count":1,"children":[]}]}]}]};
+
+    function transformData(jsonData) {
+        // Helper function to recursively build the children structure
+        function processNode(node, parentL1StageName) {
+            let displayName = node.name;
+            // Append total_count if it exists and is not already in the name
+            if (node.total_count !== undefined) {
+                if (!/\(Total Count: \d+\)$/.test(displayName)) {
+                    displayName += ` (Total Count: ${node.total_count})`;
+                }
+            }
+
+            const newNode = { name: displayName };
+
+            if (parentL1StageName === "Root") {
+                 newNode.originalStageName = node.name;
+            } else {
+                newNode.originalStageName = parentL1StageName;
+            }
+
+            if (node.children && node.children.length > 0) {
+                const stageNameToPass = (parentL1StageName === "Root") ? node.name : parentL1StageName;
+                newNode.children = node.children.map(child => processNode(child, stageNameToPass));
+            }
+
+            return newNode;
+        }
+
+        let rootDisplayName = jsonData.name;
+        if (jsonData.total_count !== undefined && !/\(Total Count: \d+\)$/.test(rootDisplayName)) {
+            rootDisplayName += ` (Total Count: ${jsonData.total_count})`;
+        }
+
+        return {
+            name: rootDisplayName,
+            originalStageName: "Root",
+            children: (jsonData.children || []).map(child => processNode(child, "Root"))
+        };
+    }
+
+    const treeData = transformData(initialJsonData);
+
+    // Auto-populated phaseColors: every depth-1 child of the root gets
+    // a stable colour from a bigger palette so all top-level dirs are
+    // distinguishable.
+    const PALETTE = [
+      ["#3498DB","#2980B9","#AED6F1"], ["#2ECC71","#27AE60","#A9DFBF"],
+      ["#E74C3C","#C0392B","#F5B7B1"], ["#9B59B6","#8E44AD","#D7BDE2"],
+      ["#F39C12","#D68910","#FAD7A0"], ["#1ABC9C","#117864","#A2D9CE"],
+      ["#34495E","#1B2631","#ABB2B9"], ["#E67E22","#BA4A00","#F5CBA7"],
+      ["#16A085","#0E6655","#A2D9CE"], ["#D35400","#A04000","#EDBB99"],
+      ["#7F8C8D","#566573","#D5DBDB"], ["#C0392B","#7B241C","#F5B7B1"],
+      ["#2E86C1","#1B4F72","#A9CCE3"], ["#28B463","#196F3D","#A9DFBF"],
+      ["#AF7AC5","#6C3483","#D2B4DE"],
+    ];
+    const phaseColors = { "Root": { fill: "#4A4A4A", stroke: "#333333", collapsedFill: "#6C757D" },
+                          "Default": { fill: "#BDC3C7", stroke: "#95A5A6", collapsedFill: "#ECF0F1" } };
+    (initialJsonData.children || []).forEach((c, i) => {
+      const pal = PALETTE[i % PALETTE.length];
+      phaseColors[c.name] = { fill: pal[0], stroke: pal[1], collapsedFill: pal[2] };
+    });
+
+    const levelSpecificPalettes = {
+      0: { fill: "#4A4A4A", stroke: "#333333", collapsedFill: "#6C757D" },
+      2: { fill: "#6ab04c", stroke: "#508a38", collapsedFill: "#a3d391" },
+      3: { fill: "#f0932b", stroke: "#d0730f", collapsedFill: "#f6c07e" },
+      4: { fill: "#be2edd", stroke: "#a01cb3", collapsedFill: "#e08bf2" },
+      5: { fill: "#00a8ff", stroke: "#007ac1", collapsedFill: "#74d2ff" },
+      6: { fill: "#e55039", stroke: "#c23620", collapsedFill: "#f09a8d" },
+      default: { fill: "#747d8c", stroke: "#57606f", collapsedFill: "#a4b0be" }
+    };
+
+    const svgElement = d3.select("#tree-svg");
+    const initialSvgWidth = +svgElement.attr("width");
+    const initialSvgHeight = +svgElement.attr("height");
+    const margin = { top: 40, right: 120, bottom: 80, left: 450 };
+    let width = initialSvgWidth - margin.left - margin.right;
+    let height = initialSvgHeight - margin.top - margin.bottom;
+    const duration = 500;
+    let nodeCounter = 0;
+    const g = svgElement.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+    const treemap = d3.tree().nodeSize([40, 0]);
+    let rootNode = d3.hierarchy(treeData, d => d.children);
+    rootNode.x0 = 0;
+    rootNode.y0 = 0;
+
+    if (rootNode.children) {
+      rootNode.children.forEach(d_child => {
+        if (d_child.children) { collapseBranch(d_child); }
+      });
+    }
+    updateTree(rootNode);
+
+    function collapseBranch(d) { if (d.children) { d._children = d.children; d._children.forEach(collapseBranch); d.children = null; } }
+    function expandBranch(d) { if (d._children) { d.children = d._children; d._children = null; } if (d.children) { d.children.forEach(expandBranch); } }
+    window.expandAll = () => { expandBranch(rootNode); updateTree(rootNode); };
+    window.collapseAll = () => { if (rootNode.children) { rootNode.children.forEach(collapseBranch); } updateTree(rootNode); };
+    window.resetView = () => { if (rootNode.children) { rootNode.children.forEach(d_child => { if (d_child.children || d_child._children) { collapseBranch(d_child); } }); } if (rootNode._children && !rootNode.children) { rootNode.children = rootNode._children; rootNode._children = null; } updateTree(rootNode); };
+
+    function updateTree(source) {
+      const treeLayoutData = treemap(rootNode);
+      let nodes = treeLayoutData.descendants();
+      let links = treeLayoutData.descendants().slice(1);
+
+      let minX = 0;
+      let maxX = 0;
+      if (nodes.length > 0) {
+        minX = d3.min(nodes, d => d.x);
+        maxX = d3.max(nodes, d => d.x);
+      }
+
+      let neededHeight = Math.max(initialSvgHeight, maxX - minX + margin.top + margin.bottom + 100);
+      svgElement.transition().duration(duration / 2).attr("height", neededHeight);
+      g.transition().duration(duration / 2).attr("transform", `translate(${margin.left},${margin.top - minX + 40})`);
+
+      nodes.forEach(d => { d.y = d.depth * 400; }); // Adjust horizontal separation if needed
+
+      const node = g.selectAll('g.node').data(nodes, d => d.id || (d.id = ++nodeCounter));
+      const nodeEnter = node.enter().append('g')
+        .attr('class', d => "node" + (d.children || d._children ? " node--internal" : " node--leaf") + (d._children ? " _children" : ""))
+        .attr('transform', d => `translate(${source.y0},${source.x0})`)
+        .on('click', (event, d) => { if (d.children) { d._children = d.children; d.children = null; } else if (d._children) { d.children = d._children; d._children = null; } updateTree(d); })
+        .style('cursor', d => (d.children || d._children) ? 'pointer' : 'default');
+
+      nodeEnter.append('circle').attr('r', 1e-6);
+
+      nodeEnter.append('text')
+        .attr('dy', '.35em')
+        .attr('x', d => d.children || d._children ? -14 : 14)
+        .attr('text-anchor', d => d.children || d._children ? 'end' : 'start')
+        .style("fill-opacity", 1e-6)
+        .call(wrapText, 380);
+
+      const nodeUpdate = nodeEnter.merge(node);
+      nodeUpdate.transition().duration(duration)
+        .attr('transform', d => `translate(${d.y},${d.x})`)
+        .attr('class', d => "node" + (d.children ? " node--internal" : " node--leaf") + (d._children ? " node--internal _children" : ""));
+
+      nodeUpdate.select('circle').attr('r', 8.5)
+        .style('fill', d => {
+            let palette;
+            if (d.depth === 0) {
+                palette = levelSpecificPalettes[0];
+            } else if (d.depth === 1) {
+                palette = phaseColors[d.data.originalStageName] || phaseColors.Default;
+            } else {
+                palette = levelSpecificPalettes[d.depth] || levelSpecificPalettes.default;
+            }
+            if (d._children) return palette.collapsedFill;
+            if (d.children) return palette.fill;
+            return "#fff";
+        })
+        .style('stroke', d => {
+            let palette;
+            if (d.depth === 0) {
+                palette = levelSpecificPalettes[0];
+            } else if (d.depth === 1) {
+                palette = phaseColors[d.data.originalStageName] || phaseColors.Default;
+            } else {
+                palette = levelSpecificPalettes[d.depth] || levelSpecificPalettes.default;
+            }
+            return palette.stroke;
+        });
+      nodeUpdate.select('text').style("fill-opacity", 1).call(wrapText, 380);
+
+      const nodeExit = node.exit().transition().duration(duration).attr('transform', d => `translate(${source.y},${source.x})`).remove();
+      nodeExit.select('circle').attr('r', 1e-6);
+      nodeExit.select('text').style('fill-opacity', 1e-6);
+
+      const link = g.selectAll('path.link').data(links, d => d.id);
+      const linkEnter = link.enter().insert('path', "g").attr('class', 'link').attr('d', d => { const o = { x: source.x0, y: source.y0 }; return diagonal(o, o); });
+
+      linkEnter.merge(link).transition().duration(duration).attr('d', d => diagonal(d, d.parent))
+        .style('stroke', d => {
+            const sourceNode = d.parent;
+            if (!sourceNode) return phaseColors.Default.stroke;
+            const l1AncestorName = sourceNode.data.originalStageName;
+            const colorPalette = phaseColors[l1AncestorName] || phaseColors.Default;
+            return colorPalette.stroke;
+        });
+      link.exit().transition().duration(duration).attr('d', d => { const o = { x: source.x, y: source.y }; return diagonal(o, o); }).remove();
+      nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
+    }
+
+    function diagonal(s, d) { return `M ${s.y} ${s.x} C ${(s.y + d.y) / 2} ${s.x}, ${(s.y + d.y) / 2} ${d.x}, ${d.y} ${d.x}`; }
+
+    function wrapText(textElements, maxWidth) {
+        const textPartColors = {
+            name: '#343a40',
+            count: '#0056b3'
+        };
+        const countRegex = /(\s\(Total Count: \d+\))$/;
+
+        textElements.each(function () {
+            const textD3 = d3.select(this);
+            const originalNodeText = textD3.datum().data.name;
+            const x = parseFloat(textD3.attr("x") || 0);
+            const initialDy = textD3.attr("dy");
+            const textAnchor = textD3.attr("text-anchor");
+            const lineHeight = 1.1;
+
+            textD3.text(null);
+
+            let namePart = originalNodeText;
+            let countPartText = "";
+
+            const countMatch = originalNodeText.match(countRegex);
+            if (countMatch && originalNodeText.endsWith(countMatch[0])) {
+                namePart = originalNodeText.substring(0, originalNodeText.length - countMatch[0].length).trim();
+                countPartText = countMatch[0].trim();
+            }
+
+            const tokens = [];
+            namePart.split(/\s+/).filter(Boolean).forEach(word => {
+                tokens.push({ text: word, type: 'name' });
+            });
+            if (countPartText) {
+                tokens.push({ text: countPartText, type: 'count' });
+            }
+
+            if (tokens.length === 0 && originalNodeText) {
+                tokens.push({ text: originalNodeText, type: 'name' });
+            }
+
+            let currentTspan = textD3.append("tspan").attr("x", x).attr("dy", initialDy);
+            if (textAnchor === "end") currentTspan.attr("text-anchor", "end");
+
+            let lineTokens = [];
+
+            for (let i = 0; i < tokens.length; i++) {
+                const tokenObj = tokens[i];
+
+                lineTokens.push(tokenObj);
+                currentTspan.text(lineTokens.map(t => t.text).join(" "));
+
+                if (currentTspan.node().getComputedTextLength() > maxWidth && lineTokens.length > 1) {
+                    lineTokens.pop();
+
+                    currentTspan.text(null);
+                    lineTokens.forEach((prevToken, idx) => {
+                        currentTspan.append("tspan")
+                            .text((idx > 0 ? " " : "") + prevToken.text)
+                            .style("fill", textPartColors[prevToken.type] || textPartColors.name)
+                            .style("font-weight", prevToken.type === 'count' ? "bold" : "normal");
+                    });
+
+                    lineTokens = [tokenObj];
+                    currentTspan = textD3.append("tspan").attr("x", x).attr("dy", lineHeight + "em");
+                    if (textAnchor === "end") currentTspan.attr("text-anchor", "end");
+                }
+            }
+
+            currentTspan.text(null);
+            lineTokens.forEach((token, idx) => {
+                currentTspan.append("tspan")
+                    .text((idx > 0 ? " " : "") + token.text)
+                    .style("fill", textPartColors[token.type] || textPartColors.name)
+                    .style("font-weight", token.type === 'count' ? "bold" : "normal");
+            });
+
+            if (textD3.selectAll("tspan > tspan").empty() && textD3.select("tspan").text().length === 0 && originalNodeText) {
+                let t = textD3.select("tspan");
+                let displayText = originalNodeText;
+                t.text(displayText).style("fill", textPartColors.name);
+                if (t.node() && t.node().getComputedTextLength() > maxWidth && displayText.length > 20) {
+                    let estimatedChars = Math.floor(maxWidth / (t.node().getComputedTextLength()/displayText.length) );
+                    displayText = displayText.substring(0, Math.max(0, estimatedChars - 3)) + "...";
+                    t.text(displayText);
+                }
+            }
+        });
+    }
+  </script>
+</body>
+</html>

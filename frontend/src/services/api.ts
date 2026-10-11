@@ -3,7 +3,7 @@
 // still use VITE_API_BASE_URL (e.g. the Render API).
 const API_ORIGIN = import.meta.env.DEV
   ? ''
-  : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000');
+  : (import.meta.env.VITE_API_BASE_URL || '');
 const API_BASE = `${API_ORIGIN}/api/v1`;
 
 export interface DashboardStats {
@@ -86,6 +86,45 @@ export interface EgressResult {
   message: string;
 }
 
+export interface AIAlertTriageResult {
+  alert_id: string;
+  provider: string;
+  risk_assessment: string;
+  recommended_action: string;
+  confidence_score: number;
+  containment_steps: string[];
+  analysis_summary: string;
+}
+
+export interface AIEventExplanation {
+  event_id: string;
+  provider: string;
+  threat_name: string;
+  severity_rating: string;
+  technical_explanation: string;
+  attacker_intent: string;
+  mitigation_guidance: string;
+  iocs_identified: string[];
+}
+
+export interface SystemStatusResponse {
+  status: string;
+  timestamp: string;
+  version: string;
+  subsystems: {
+    database: { status: string; engine: string; error?: string };
+    ai_service: { provider: string; model: string; healthy: boolean; fallback_available: boolean; configured_provider?: string };
+    semantic_firewall: { status: string; engine: string; ready: boolean };
+    egress_gateway: { status: string; active_honeytokens: number };
+  };
+  metrics: {
+    total_agents: number;
+    isolated_agents: number;
+    total_events: number;
+    open_alerts: number;
+  };
+}
+
 type ApiFetchOptions = RequestInit & { suppressAuthRedirect?: boolean };
 
 // Utility to read a cookie by name
@@ -121,25 +160,34 @@ export async function apiFetch(url: string, options: ApiFetchOptions = {}) {
   const res = await fetch(fullUrl, mergedOptions);
 
   if (res.status === 401) {
-    // Unauthorized -> redirect to login
     if (!suppressAuthRedirect && window.location.pathname !== '/login') {
       window.location.href = '/login';
     }
-    throw new Error('Unauthorized');
+    const errBody = await res.json().catch(() => null);
+    const msg = errBody?.detail || 'Unauthorized';
+    const error = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg)) as Error & { status?: number };
+    error.status = 401;
+    throw error;
   }
 
   if (res.status === 403) {
-    // Forbidden -> RBAC or IDOR violation
     if (!suppressAuthRedirect && window.location.pathname !== '/403') {
       window.location.href = '/403';
     }
-    const error = new Error('Access Denied') as Error & { status?: number };
+    const errBody = await res.json().catch(() => null);
+    const msg = errBody?.detail || 'Access Denied';
+    const error = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg)) as Error & { status?: number };
     error.status = 403;
     throw error;
   }
 
   if (!res.ok) {
-    const error = new Error(`API Error: ${res.status} ${res.statusText}`) as Error & { status?: number };
+    const errBody = await res.json().catch(() => null);
+    let msg = `API Error: ${res.status} ${res.statusText}`;
+    if (errBody?.detail) {
+      msg = typeof errBody.detail === 'string' ? errBody.detail : JSON.stringify(errBody.detail);
+    }
+    const error = new Error(msg) as Error & { status?: number };
     error.status = res.status;
     throw error;
   }
@@ -205,12 +253,16 @@ export const ingestDemoContent = async (agentId: string, content: string): Promi
   });
 };
 
-export const createHoneyToken = async (agentId: string): Promise<HoneyToken> => {
+export const createHoneyToken = async (
+  agentId: string,
+  scope: string = 'system_prompt',
+  token_type: string = 'api_key'
+): Promise<HoneyToken> => {
   return apiFetch('/honeytokens', {
     method: 'POST',
     suppressAuthRedirect: true,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agent_id: agentId, scope: 'system_prompt', token_type: 'api_key' }),
+    body: JSON.stringify({ agent_id: agentId, scope, token_type }),
   });
 };
 
@@ -256,6 +308,167 @@ export const fetchAllAlerts = async (limit: number = 50, offset: number = 0): Pr
   return apiFetch(`/alerts?limit=${limit}&offset=${offset}`);
 };
 
+export const updateAlertStatus = async (alertId: string, status: string): Promise<Alert> => {
+  return apiFetch(`/alerts/${alertId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+};
+
+export const triageAlert = async (alertId: string): Promise<AIAlertTriageResult> => {
+  return apiFetch(`/alerts/${alertId}/triage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+};
+
+export const explainSecurityEvent = async (eventId: string): Promise<AIEventExplanation> => {
+  return apiFetch(`/security-events/${eventId}/explain`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+};
+
+export const fetchSystemStatus = async (): Promise<SystemStatusResponse> => {
+  return apiFetch('/system/status');
+};
+
+export const registerUser = async (email: string, password: string): Promise<{ message: string; email: string }> => {
+  return apiFetch('/auth/register', {
+    method: 'POST',
+    suppressAuthRedirect: true,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+};
+
+export const loginFirebase = async (idToken: string): Promise<{ message: string; email: string }> => {
+  return apiFetch('/auth/firebase-login', {
+    method: 'POST',
+    suppressAuthRedirect: true,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id_token: idToken }),
+  });
+};
+
 export const fetchCurrentUser = async (): Promise<{ email: string; role: string }> => {
   return apiFetch(`/auth/me`);
 };
+
+export const parseEventMetadata = (event: SecurityEvent) => {
+  let category = '-';
+  let detector = '-';
+  if (event.evidence && typeof event.evidence.metadata === 'object' && event.evidence.metadata !== null) {
+    const metadata = event.evidence.metadata;
+    const detectors = Object.keys(metadata);
+    if (detectors.length > 0) {
+      detector = detectors.map((name) => name.replace('Detector', '')).join(', ');
+      const categories = detectors.map((name) => (metadata as Record<string, any>)[name]?.category).filter((value) => value && value !== 'safe');
+      if (categories.length > 0) category = Array.from(new Set(categories)).join(', ');
+    }
+  }
+  return { category, detector };
+};
+
+export interface AIProviderInfo {
+  id: string;
+  provider_name: string;
+  display_name: string;
+  model: string;
+  status: string;
+  is_configured: boolean;
+  is_active_default: boolean;
+  latency_ms?: number;
+  message?: string;
+}
+
+export interface PipelineStageTrace {
+  stage: string;
+  name: string;
+  status: string;
+  latency_ms: number;
+  details?: string;
+  risk_score?: number;
+  detectors?: Record<string, any>;
+}
+
+export interface PlaygroundExecutionResponse {
+  execution_id: string;
+  timestamp: string;
+  agent_id: string;
+  agent_name: string;
+  prompt: string;
+  provider: string;
+  model: string;
+  decision: 'ALLOW' | 'BLOCK' | 'QUARANTINE';
+  risk_score: number;
+  reason: string;
+  latency_ms: number;
+  ai_response?: string;
+  tool_execution?: {
+    tool: string;
+    status: 'AUTHORIZED' | 'DENIED';
+    reason?: string;
+    output?: any;
+  };
+  security_event_id?: string;
+  alert_id?: string;
+  forensic_explanation?: string;
+  detector_breakdown?: Record<string, any>;
+  pipeline_trace: PipelineStageTrace[];
+}
+
+export interface ScenarioPreset {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  expected_decision: string;
+  badge_variant: string;
+  prompt: string;
+  system_prompt?: string;
+  requested_tool?: {
+    name: string;
+    arguments: Record<string, any>;
+  };
+  judge_notes: string;
+}
+
+export const fetchAIProviders = async (): Promise<AIProviderInfo[]> => {
+  return apiFetch('/playground/providers');
+};
+
+export const testAIProvider = async (provider: string): Promise<Record<string, any>> => {
+  return apiFetch('/playground/providers/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider }),
+  });
+};
+
+export const fetchPlaygroundScenarios = async (): Promise<ScenarioPreset[]> => {
+  return apiFetch('/playground/scenarios');
+};
+
+export const executePlaygroundRequest = async (payload: {
+  prompt: string;
+  provider?: string;
+  agent_id?: string;
+  system_prompt?: string;
+  requested_tool?: { name: string; arguments?: Record<string, any> };
+}): Promise<PlaygroundExecutionResponse> => {
+  return apiFetch('/playground/execute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+};
+
+export const approveQuarantinedEvent = async (eventId: string): Promise<{ status: string; decision: string; reviewer: string }> => {
+  return apiFetch(`/playground/approve/${eventId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+};
+

@@ -21,3 +21,6 @@ venv/
 # Database
 *.db
 *.sqlite3
+
+# Graphify local cache
+graphify-out/cache/

@@ -8,7 +8,8 @@ import {
   List, 
   Database,
   ShieldCheck,
-  FlaskConical
+  FlaskConical,
+  Terminal
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
@@ -34,6 +35,7 @@ const Sidebar: React.FC = () => {
     { 
       label: 'Operations & Sandbox', 
       items: [
+        { name: 'Secure AI Playground', path: '/playground', icon: <Terminal size={17} /> },
         { name: 'Guided Demo', path: '/dashboard#guided-demo', icon: <FlaskConical size={17} /> }
       ] 
     },

@@ -1,248 +1,261 @@
 # AgentSentry
 
-AgentSentry is a robust security platform designed specifically to monitor, protect, and isolate AI Agents in production environments. It provides real-time defense against prompt injection, data exfiltration, and unsafe tool execution while maintaining a full audit trail of agent behavior.
+AgentSentry is an enterprise-grade cybersecurity runtime designed specifically to monitor, protect, and isolate autonomous AI Agents in production environments. It provides real-time defense against prompt injection, data exfiltration, adversarial directives, and decoy credential theft while maintaining an immutable audit trail of agent behavior.
 
-## Problem
+---
 
-As AI Agents gain autonomous execution capabilities and access to sensitive tools, they become prime targets for attackers. Traditional security models do not account for the unstructured nature of LLM interactions. Attackers can use prompt injection to manipulate agent behavior, access sensitive context, and exfiltrate data through seemingly benign tool calls.
+## The Problem
 
-## Solution
+As AI Agents gain tool execution privileges, access to enterprise databases, and integration into autonomous workflows, they become prime targets for attackers. Traditional network security firewalls cannot interpret unstructured LLM interactions or semantic intent. Attackers use indirect prompt injection, instruction overrides, and privilege escalation to manipulate agent execution, access proprietary context, and exfiltrate credentials via seemingly benign tool invocations.
 
-AgentSentry solves this by wrapping the AI Agent in a strict security perimeter. It acts as an Egress Enforcement Gateway and Ingestion Firewall, analyzing every input and output. By injecting active decoys (HoneyTokens) into the agent's context and utilizing semantic similarity models to detect attack intent, AgentSentry can instantly block malicious actions and automatically isolate compromised agents before damage occurs.
+---
 
-## Core Features
+## The Solution
 
-- **Authentication**: JWT-based session management using secure HttpOnly cookies.
-- **RBAC**: Strict Role-Based Access Control (Admin, Analyst, Viewer).
-- **Agent Ownership**: Enforced data isolation so users only interact with authorized agents.
-- **Prompt-Injection Detection**: Validates inputs before they reach the agent.
-- **Rule-Based Detection**: Fast, deterministic pattern matching for known malicious payloads.
-- **Semantic Similarity**: Uses vector embeddings to detect semantic intent of unknown attacks.
-- **Risk Aggregation**: Combines multiple detector signals into a unified risk score.
-- **HoneyTokens**: Active decoys injected into the LLM context to detect unauthorized egress.
-- **Egress Enforcement Gateway**: Intercepts and validates all outbound agent communications.
-- **Automatic Isolation**: Quarantines agents the moment critical thresholds or HoneyTokens are triggered.
-- **Security Events**: Immutable logging of all security decisions and context.
-- **Alerts**: Real-time SOC dashboard notifications for analyst review.
-- **Guided Demo**: Built-in interactive scenarios to demonstrate security capabilities.
-- **Audit/Security Controls**: Comprehensive audit logging for all critical system actions.
+AgentSentry envelopes autonomous agents within a defense-in-depth security perimeter:
+1. **Ingestion Semantic Firewall**: Validates user inputs and external documents before they reach the agent using fast deterministic pattern filters and local vector embeddings (`bge-small-en-v1.5`).
+2. **HoneyToken Canary Mesh**: Plants active decoy credentials within agent workspaces and prompts to detect exfiltration attempts.
+3. **Egress Enforcement Gateway**: Intercepts outbound traffic and tool calls. If a decoy canary is detected in an outbound payload, execution is severed and the agent is immediately placed into cryptographically enforced isolation.
+4. **AI Intelligence Engine (Grok, Gemini, Local)**: Offers real multi-provider threat classification, alert incident triage, and deep forensic explanations.
+5. **Security Operations Center (SOC) Console**: A modern cybersecurity dashboard providing real-time telemetry, agent fleet controls, alert triage actions, and guided interactive attack simulations.
 
-## Architecture
+---
 
-AgentSentry follows a clean, layered architecture separating the presentation, API, and data layers:
+## Core Capabilities
+
+- **Real AI Multi-Provider Subsystem**:
+  - **xAI Grok**: Deep adversarial reasoning via `grok-beta` / `grok-2`.
+  - **Google Gemini**: Rapid threat triage and multimodal evaluation via `gemini-1.5-flash`.
+  - **Deterministic Local Heuristics**: 100% offline fallback requiring zero API keys, providing fast, deterministic threat classification.
+- **Enterprise Authentication & Session Security**:
+  - Secure HttpOnly JWT session cookies (`SameSite=Lax`, `Secure` in production).
+  - Double-Submit Cookie CSRF defense on all state-mutating requests (`X-CSRF-Token` header).
+  - Optional Google Single Sign-On mapping via Firebase OAuth tokens.
+  - Multi-tenant tenant isolation ensuring operators can only manage agents within their boundary.
+- **Canary Decoy Mesh (HoneyTokens)**:
+  - Synthetic API keys, JWTs, and database connection strings bound to agent scopes.
+  - Automatic rotation and canary lifecycle monitoring.
+  - Zero token leakage: canary values are redacted across logs, API responses, and the UI.
+- **Automated Fleet Isolation**:
+  - Immediate quarantine and connection severing when canary triggers or critical thresholds are crossed.
+  - Manual isolation and restoration controls with operator confirmation modals.
+- **Incident Triage & Forensic Audit**:
+  - Live AI Incident Triage offering risk assessment, recommended action, and containment playbooks.
+  - AI Forensic Explanations detailing threat classifications, attacker intent, and identified IOCs.
+  - Comprehensive health check telemetry endpoint (`GET /api/v1/system/status`).
+
+---
+
+## System Architecture
 
 ```mermaid
 graph TD
-    Browser[Browser / User] -->|HTTPS| Vercel[Vercel Frontend]
-    Vercel -->|API Requests| Render[Render FastAPI Backend]
+    User([Security Operator / SOC]) -->|HTTPS| Frontend[React 19 + Vite SaaS Console]
+    AgentRunner[Autonomous Agent Host] -->|Inbound Content| Firewall[Ingestion Semantic Firewall]
     
-    subgraph "Backend System"
-        Render --> Pipeline[Detection Pipeline]
-        Pipeline --> Rule[Rule Detector]
-        Pipeline --> Semantic[Semantic Detector]
-        Pipeline --> Risk[Risk Aggregator]
-        Pipeline --> Egress[Egress Gateway & HoneyTokens]
+    subgraph "AgentSentry Security Runtime"
+        Firewall -->|Rule Matcher| RuleEngine[Rule-Based Heuristics]
+        Firewall -->|FastEmbed ONNX| SemanticEngine[Semantic Vector Detector]
+        RuleEngine --> Aggregator[Risk Aggregator Engine]
+        SemanticEngine --> Aggregator
+
+        Aggregator --> Decision{Risk Threshold}
+        Decision -->|Allow| AgentExecution[Agent Context & Execution]
+        Decision -->|Block/Quarantine| SecEvent[Security Event Log]
+
+        AgentExecution --> EgressGate[Egress Enforcement Gateway]
+        DecoyMesh[(HoneyToken Mesh)] -.->|Canary Seeds| AgentExecution
+
+        EgressGate --> CanaryCheck{Canary Leak?}
+        CanaryCheck -->|Yes| AutoIsolate[Isolate Agent Fleet Member]
+        AutoIsolate --> AlertSystem[SOC Alert Dispatcher]
+        CanaryCheck -->|No| Destination[External Tool / API]
+
+        AlertSystem --> AIOrchestrator[AI Intelligence Manager]
+        AIOrchestrator --> Grok[xAI Grok Provider]
+        AIOrchestrator --> Gemini[Google Gemini Provider]
+        AIOrchestrator --> Local[Offline Local Heuristics]
     end
-    
-    Render -->|SQLAlchemy| DB[(PostgreSQL)]
-    Egress -->|Trigger| Alert[Alert / Event System]
+
+    Frontend -->|REST + CSRF| FastAPIServer[FastAPI Backend]
+    FastAPIServer --> Database[(PostgreSQL / SQLite)]
+    SecEvent --> Database
+    AlertSystem --> Database
 ```
 
-## Detection Pipeline
-
-All interactions pass through the Detection Pipeline:
-
-Input → validation → rule-based detection → semantic similarity → risk aggregation → decision → event/alert → optional isolation
-
-The semantic detection utilizes the `BAAI/bge-small-en-v1.5` model to compute cosine similarity against a database of attack-intent anchors. The pipeline evaluates the similarity/confidence and calculates a final risk score. High risk scores result in immediate rejection of the payload.
-
-## HoneyToken Flow
-
-AgentSentry injects tracked secrets into the prompt:
-
-Agent context → active HoneyToken → malicious egress attempt → Egress Enforcement Gateway → BLOCK_AND_ISOLATE → security event → critical alert → agent isolation
-
-The raw token values are strictly protected. They are redacted from the UI, browser-visible API responses, logs, event evidence, and source control.
-
-## Authentication & Security
-
-- **HttpOnly Cookies**: Prevents XSS token theft.
-- **CSRF Protection**: Implements Double-Submit Cookie pattern for all mutating requests.
-- **RBAC & Ownership**: Enforces strict boundaries on data access.
-- **Rate Limiting**: Throttles authentication and API abuse.
-- **CORS**: Strictly bound to the frontend origin (no wildcards allowed with credentials).
-- **Security Headers**: Injects nosniff, frame-deny, and HSTS headers.
-- **Request Size Limits**: Prevents payload-based DoS attacks.
-- **Validation**: Strict Pydantic models for all inputs.
-- **Secure Secret Handling**: Ensures development secrets are blocked in production.
-- **Audit Logging**: Immutable tracking of critical user actions.
+---
 
 ## Tech Stack
 
-**Frontend**:
-- React 19
-- TypeScript
-- Vite
-- React Router
-- Vanilla CSS
-- Framer Motion
-- Lucide React
+### Backend
+- **Framework**: FastAPI (Python 3.12)
+- **Database ORM**: SQLAlchemy 2.0 (asyncio) + Alembic
+- **Database Engines**: PostgreSQL (`asyncpg`) in production, SQLite (`aiosqlite`) in development/tests
+- **Embedding / Vector Engine**: FastEmbed (`BAAI/bge-small-en-v1.5` on ONNX runtime)
+- **AI Integrations**: httpx async clients for xAI Grok API and Google Gemini REST API
+- **Security & Crypto**: PyJWT, passlib (bcrypt), secrets, slowapi rate limiting
 
-**Backend**:
-- FastAPI
-- SQLAlchemy
-- Alembic
-- PostgreSQL (asyncpg) / SQLite (aiosqlite)
-- Pydantic
-- FastEmbed
-- NumPy
-- PyJWT
-- passlib (bcrypt)
-- slowapi
+### Frontend
+- **Framework**: React 19 + TypeScript
+- **Tooling**: Vite 8, oxlint
+- **UI Architecture**: Modern dark cybersecurity SaaS design system (inspired by 21st.dev)
+- **Animations**: Framer Motion
+- **Icons**: Lucide React
+- **Interactive 3D**: Lazy-loaded `@splinetool/react-spline` on the landing page
 
-## Project Structure
+---
 
+## API Reference
+
+### Health & Telemetry
+- `GET /health` — Basic uptime check
+- `GET /api/v1/system/status` — Comprehensive subsystem status (Database, AI Service, Semantic Firewall, Egress Gateway, and metrics)
+
+### Authentication & User Management
+- `POST /api/v1/auth/login` — Authenticate operator and issue HttpOnly cookies
+- `POST /api/v1/auth/register` — Register a new operator analyst account
+- `POST /api/v1/auth/firebase-login` — Authenticate via Firebase OAuth ID token
+- `POST /api/v1/auth/logout` — Terminate session and clear security cookies
+- `GET /api/v1/auth/me` — Retrieve active operator profile
+
+### Monitoring & Operations
+- `GET /api/v1/dashboard/stats` — Real-time telemetry summary metrics
+- `GET /api/v1/agents` — List monitored autonomous agents
+- `POST /api/v1/agents` — Register an agent
+- `GET /api/v1/agents/{id}` — Get agent details and security posture
+- `POST /api/v1/agents/{id}/isolate` — Lock down and isolate an agent
+- `POST /api/v1/agents/{id}/restore` — Restore an isolated agent to active status
+- `POST /api/v1/ingest` — Evaluate inbound prompt/document content through the firewall
+- `POST /api/v1/agents/{id}/egress` — Validate outbound payload against honeytoken canary traps
+
+### HoneyToken Decoy Mesh
+- `GET /api/v1/honeytokens` — List configured canary decoy tokens
+- `POST /api/v1/honeytokens` — Deploy a new honeytoken trap to an agent
+- `POST /api/v1/honeytokens/rotate` — Revoke and rotate a decoy credential
+
+### Alerts & Security Events
+- `GET /api/v1/alerts` — Fetch dispatched incident alerts
+- `PATCH /api/v1/alerts/{id}` — Update alert status (`acknowledged`, `resolved`, `ignored`)
+- `POST /api/v1/alerts/{id}/triage` — Run AI Incident Triage on an alert
+- `GET /api/v1/security-events` — Search and audit immutable security telemetry records
+- `POST /api/v1/security-events/{id}/explain` — Generate an AI forensic explanation for an event
+
+---
+
+## Local Development Quickstart
+
+### Prerequisites
+- Python 3.11+
+- Node.js 18+
+- npm or pnpm
+
+### 1. Installation
+```bash
+# Clone the repository
+git clone https://github.com/dilipnetawat/AgentSentry.git
+cd AgentSentry
+
+# Install frontend dependencies
+npm install --prefix frontend
+
+# Set up Python virtual environment
+python -m venv .venv
+.\.venv\Scripts\activate      # Windows
+# source .venv/bin/activate   # Linux/macOS
+
+# Install backend dependencies
+pip install -r backend/requirements.txt
 ```
-AgentSentry/
-├── backend/
-│   ├── api/          # FastAPI routers and dependencies
-│   ├── core/         # Security, config, and detectors
-│   ├── models/       # SQLAlchemy models
-│   ├── services/     # Business logic
-│   └── main.py       # Application entrypoint
-├── frontend/
-│   ├── src/
-│   │   ├── components/ # React components
-│   │   ├── pages/      # Route pages
-│   │   ├── services/   # API client
-│   │   └── styles/     # Vanilla CSS
-├── alembic/          # Database migrations
-└── render.yaml       # Render deployment configuration
+
+### 2. Configuration
+Copy the sample environment file:
+```bash
+cp .env.example .env
+```
+Key settings in `.env`:
+- `ENVIRONMENT=development`
+- `DATABASE_URL=sqlite+aiosqlite:///dev.db`
+- `JWT_SECRET_KEY=dev-secret-do-not-use-in-production-change-in-prod-32chars`
+- `AI_PROVIDER=auto` (set `XAI_API_KEY` or `GEMINI_API_KEY` if available; otherwise falls back automatically to the offline heuristic engine)
+
+### 3. Database Initialization & Seeding
+```bash
+# Apply migrations
+python -m alembic upgrade head
+
+# Seed initial operator accounts and demo scenarios
+python -m scripts.seed
+```
+Default evaluation credentials:
+- Operator Email: `operator@agentsentry.io`
+- Master Password: `agent_sentry_operator_2026`
+
+### 4. Running the Development Server
+```bash
+# Concurrently launches backend (http://127.0.0.1:8000) and frontend (http://localhost:5173)
+npm run dev
 ```
 
-## Local Development
+---
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd AgentSentry
-   ```
+## Testing & Quality Assurance
 
-2. Install frontend dependencies:
-   ```bash
-   cd frontend
-   npm install
-   cd ..
-   ```
+Run the automated test suite across all subsystems:
+```bash
+# Run all 79 integration and unit tests
+npm run test
+# or: python -m pytest backend/tests/ -v
 
-3. Create backend environment:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .\.venv\Scripts\activate
-   ```
+# Run frontend build check
+npm run build
 
-4. Install backend requirements:
-   ```bash
-   pip install -r backend/requirements.txt
-   ```
+# Run linter
+npm run lint
+```
 
-5. Configure environment variables:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your local settings
-   ```
+**Test Verification Summary**:
+- `test_agents.py`: Agent registration, status updates, IDOR isolation boundaries (9 passed)
+- `test_ai_and_features.py`: Grok, Gemini, Local AI provider triage, system telemetry, registration (10 passed)
+- `test_alerts.py`: Firewall and honeytoken alert generation (2 passed)
+- `test_dashboard_api.py`: Stats calculations, list pagination, telemetry aggregation (5 passed)
+- `test_e2e_security_lifecycle.py`: End-to-end ingestion -> firewall -> alert -> isolation lifecycle (2 passed)
+- `test_firewall.py`: Ingestion allow, block, quarantine decisions (4 passed)
+- `test_fix_pass.py`: RBAC, secure cookie flags, CORS, pagination, idempotent seeding (8 passed)
+- `test_honeytoken_mesh.py` & `test_honeytokens.py`: Canary lifecycle, rotation, trigger interception (8 passed)
+- `test_ingestion.py`: Payload validation, length limits, isolation enforcement (5 passed)
+- `test_risk_and_policy.py`: Multi-detector aggregation, score boundary caps (7 passed)
+- `test_rule_detector.py`: Deterministic attack pattern filters across 14 adversarial vectors (14 passed)
+- `test_semantic_detector.py` & `test_semantic_interface.py`: FastEmbed ONNX embedding calibration and cosine similarity (5 passed)
 
-6. Run migrations:
-   ```bash
-   alembic upgrade head
-   ```
+**Result**: `79 passed in 26.39s` (100% pass rate).
 
-7. Start the application:
-   ```bash
-   # In one terminal (backend)
-   uvicorn backend.main:app --reload
+---
 
-   # In another terminal (frontend)
-   cd frontend
-   npm run dev
-   ```
+## Production Deployment
 
-## Environment Variables
-
-Copy `.env.example` to `.env` to configure your environment. Do not commit `.env`.
-
-**Backend Variables**:
-- `ENVIRONMENT`: Set to `production` or `development`.
-- `JWT_SECRET_KEY`: A strong, random 32+ character string.
-- `ALLOWED_ORIGINS`: The URL of your frontend (e.g., `https://agentsentry.vercel.app`).
-- `DATABASE_URL`: Connection string for PostgreSQL or SQLite.
-- `ADMIN_EMAIL` / `ADMIN_PASSWORD`: Credentials for the initial admin account (development only).
-
-**Frontend Variables**:
-- `VITE_API_BASE_URL`: The URL of your deployed backend (e.g., `https://agentsentry-backend.onrender.com`).
-
-## Deployment
-
-### Backend — Render
-1. Connect your GitHub repository to Render as a Web Service.
-2. Set the root directory to `.` (the repository root).
+### Backend on Render
+1. Create a **Web Service** pointing to this repository.
+2. Root Directory: `.`
 3. Build Command: `pip install -r backend/requirements.txt`
-4. Start Command: `alembic upgrade head && cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
+4. Start Command: `python -m alembic upgrade head && python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
 5. Configure Environment Variables:
    - `ENVIRONMENT=production`
-   - `DATABASE_URL` (Use Render PostgreSQL URL, ensure it uses `postgresql://`)
-   - `JWT_SECRET_KEY` (Generate a secure random string)
-   - `ALLOWED_ORIGINS` (Set to your Vercel frontend URL)
+   - `DATABASE_URL=postgresql+asyncpg://<user>:<password>@<host>/<dbname>`
+   - `JWT_SECRET_KEY=<32-char-random-string>`
+   - `ALLOWED_ORIGINS=https://<your-vercel-app>.vercel.app`
+   - `AI_PROVIDER=auto` (optionally set `XAI_API_KEY` or `GEMINI_API_KEY`)
 
-### Frontend — Vercel
-1. Import the GitHub repository into Vercel.
-2. Framework Preset: Vite
-3. Root Directory: `frontend`
+### Frontend on Vercel
+1. Import the repository into Vercel.
+2. Root Directory: `frontend`
+3. Framework Preset: `Vite`
 4. Build Command: `npm run build`
 5. Output Directory: `dist`
 6. Environment Variables:
-   - `VITE_API_BASE_URL`: The URL of your deployed Render backend.
+   - `VITE_API_BASE_URL=https://<your-render-backend>.onrender.com`
 
-## GitHub
-This repository contains the full source code for the AgentSentry platform. All contributions must pass the security baseline before deployment.
+---
 
-## API
+## License
 
-Key endpoints include:
-- `GET /health` - System health check
-- `POST /api/v1/auth/login` - Authenticate user
-- `POST /api/v1/auth/logout` - Terminate session
-- `GET /api/v1/auth/me` - Get current user profile
-- `GET /api/v1/dashboard/stats` - Retrieve SOC metrics
-- `GET /api/v1/agents` - List monitored agents
-- `POST /api/v1/ingest` - Process incoming agent context
-- `GET /api/v1/agents/{agent_id}/context` - Retrieve agent context (including HoneyTokens)
-- `POST /api/v1/agents/{agent_id}/egress` - Validate outbound communications
-- `GET /api/v1/honeytokens` - List active HoneyTokens
-- `POST /api/v1/honeytokens/rotate` - Rotate a compromised HoneyToken
-- `GET /api/v1/security-events` - Audit security events
-- `GET /api/v1/alerts` - Monitor active alerts
-
-## Security Model
-
-When malicious input is detected during ingestion, the payload is immediately dropped with a 403 Forbidden response, generating a Security Event.
-When a HoneyToken triggers during egress, the connection is instantly severed, the agent is moved to an ISOLATED state, and an urgent alert is dispatched to the SOC dashboard.
-
-## Limitations / Known Constraints
-
-- The Semantic Model (`bge-small-en-v1.5`) operates on CPU via FastEmbed, which may introduce latency under high concurrent load.
-- Rate limiting relies on an in-memory sliding window, which requires external coordination (e.g., Redis) if scaled across multiple worker processes.
-- The 3D UI scene relies on an external Spline dependency and will safely fallback to a standard component if network connectivity fails.
-
-## Verification
-
-Deployment verification checks:
-- Backend Database Migrations: PASS
-- Cross-Origin Cookie Handling: PASS
-- Double-Submit CSRF Validation: PASS
-- Agent Isolation Workflow: PASS
-- Frontend Production Build: PASS
-
-## Demo
-
-The application includes a built-in Guided Demo on the dashboard. This interactive tool simulates benign ingestion, prompt injection attacks, and HoneyToken exfiltration, allowing evaluators to observe the SOC response in real-time.
+This project is licensed under the Apache 2.0 License.

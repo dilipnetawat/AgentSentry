@@ -1,34 +1,46 @@
 import React, { useEffect, useState } from 'react';
-import { fetchHoneyTokens, rotateHoneyToken } from '../services/api';
-import type { HoneyToken } from '../services/api';
+import { fetchHoneyTokens, rotateHoneyToken, createHoneyToken, fetchRecentAgents } from '../services/api';
+import type { HoneyToken, Agent } from '../services/api';
 import { SkeletonTable } from '../components/SkeletonLoader';
 import Modal from '../components/Modal';
 import { useToast } from '../contexts/ToastContext';
 import { Badge } from '../components/Badge';
 import { PageHeader } from '../components/PageHeader';
-import { Database, RefreshCw, Lock, KeyRound } from 'lucide-react';
+import { Database, RefreshCw, Lock, KeyRound, Plus, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const HoneyTokens: React.FC = () => {
   const [tokens, setTokens] = useState<HoneyToken[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
+  // Rotate Modal State
   const [rotatingTokenId, setRotatingTokenId] = useState<string | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [rotateModalOpen, setRotateModalOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Deploy Modal State
+  const [deployModalOpen, setDeployModalOpen] = useState(false);
+  const [deployAgentId, setDeployAgentId] = useState('');
+  const [deployScope, setDeployScope] = useState('system_prompt');
+  const [deployTokenType, setDeployTokenType] = useState('api_key');
+  const [isDeploying, setIsDeploying] = useState(false);
+
   const { showToast } = useToast();
 
-  useEffect(() => {
-    loadTokens();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadTokens = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const data = await fetchHoneyTokens();
-      setTokens(data);
+      const [tokenData, agentData] = await Promise.all([
+        fetchHoneyTokens(),
+        fetchRecentAgents(50, 0),
+      ]);
+      setTokens(tokenData);
+      setAgents(agentData);
+      if (agentData.length > 0 && !deployAgentId) {
+        setDeployAgentId(agentData[0].id);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load HoneyTokens');
     } finally {
@@ -36,9 +48,14 @@ const HoneyTokens: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleRotateClick = (id: string) => {
     setRotatingTokenId(id);
-    setModalOpen(true);
+    setRotateModalOpen(true);
   };
 
   const confirmRotate = async () => {
@@ -49,20 +66,32 @@ const HoneyTokens: React.FC = () => {
       if (!token) throw new Error('HoneyToken not found');
       const result = await rotateHoneyToken(token);
       showToast(result.message || 'Token rotated successfully', 'success');
-      await loadTokens();
+      await loadData();
     } catch (err: any) {
       showToast(err.message || 'Failed to rotate HoneyToken', 'error');
     } finally {
       setActionLoading(false);
-      setModalOpen(false);
+      setRotateModalOpen(false);
       setRotatingTokenId(null);
     }
   };
 
-  const closeRotateModal = () => {
-    if (!actionLoading) {
-      setModalOpen(false);
-      setRotatingTokenId(null);
+  const handleDeployToken = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deployAgentId) {
+      showToast('Please select an agent to bind this HoneyToken', 'error');
+      return;
+    }
+    setIsDeploying(true);
+    try {
+      await createHoneyToken(deployAgentId, deployScope, deployTokenType);
+      showToast('Canary HoneyToken deployed successfully', 'success');
+      setDeployModalOpen(false);
+      await loadData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to deploy HoneyToken', 'error');
+    } finally {
+      setIsDeploying(false);
     }
   };
 
@@ -72,6 +101,15 @@ const HoneyTokens: React.FC = () => {
         title="HoneyToken Decoy Credential Vault" 
         description="Active decoy traps deployed across agent execution environments to detect unauthorized exfiltration."
         icon={<Database size={20} />}
+        actions={
+          <button
+            className="btn btn-primary btn-accent text-xs flex items-center gap-1.5"
+            onClick={() => setDeployModalOpen(true)}
+          >
+            <Plus size={14} />
+            <span>Deploy HoneyToken</span>
+          </button>
+        }
       />
       
       {error && <div className="form-error">{error}</div>}
@@ -96,7 +134,7 @@ const HoneyTokens: React.FC = () => {
           <div className="workspace-empty">
             <KeyRound size={32} />
             <strong>No HoneyTokens configured</strong>
-            <span>Create a canary token via API or execute the HoneyToken Guided Security Demo scenario.</span>
+            <span>Create a canary token via the button above or execute the HoneyToken Guided Security Demo scenario.</span>
           </div>
         ) : (
           <div className="table-container">
@@ -161,13 +199,93 @@ const HoneyTokens: React.FC = () => {
         )}
       </motion.section>
 
-      <Modal 
-        isOpen={modalOpen} 
-        onClose={closeRotateModal} 
+      {/* Deploy HoneyToken Modal */}
+      <Modal
+        isOpen={deployModalOpen}
+        onClose={() => setDeployModalOpen(false)}
+        title="Deploy Canary HoneyToken Trap"
+      >
+        <form onSubmit={handleDeployToken} className="flex flex-col gap-4">
+          <div className="form-group">
+            <label htmlFor="honeytoken-agent-select">Target Agent Fleet Member</label>
+            {agents.length === 0 ? (
+              <p className="text-xs text-tertiary m-0">No agents registered yet. Register an agent first.</p>
+            ) : (
+              <select
+                id="honeytoken-agent-select"
+                value={deployAgentId}
+                onChange={(e) => setDeployAgentId(e.target.value)}
+                required
+              >
+                {agents.map((ag) => (
+                  <option key={ag.id} value={ag.id}>
+                    {ag.name} ({ag.id.slice(0, 8)}...)
+                  </option>
+                ))}
+              </select>
+            )}
+            <span className="text-xs text-tertiary mt-1">
+              Select the autonomous agent workspace to protect with this canary decoy credential.
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="honeytoken-scope-select">Injection Scope</label>
+            <select
+              id="honeytoken-scope-select"
+              value={deployScope}
+              onChange={(e) => setDeployScope(e.target.value)}
+            >
+              <option value="system_prompt">System Prompt / Instructions</option>
+              <option value="rag_context">RAG Knowledge Base / Vector Docs</option>
+              <option value="api_keys">Environment Variables / Config</option>
+              <option value="file_system">Agent Scratch File System</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="honeytoken-type-select">Canary Credential Type</label>
+            <select
+              id="honeytoken-type-select"
+              value={deployTokenType}
+              onChange={(e) => setDeployTokenType(e.target.value)}
+            >
+              <option value="api_key">Synthetic SaaS API Key (ak_live_...)</option>
+              <option value="jwt_token">Synthetic Service Account JWT</option>
+              <option value="database_url">Database Connection String</option>
+              <option value="aws_secret">AWS Access Key Pair</option>
+            </select>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-2">
+            <button
+              type="button"
+              className="btn btn-secondary text-xs py-2 px-3"
+              onClick={() => setDeployModalOpen(false)}
+              disabled={isDeploying}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary btn-accent text-xs py-2 px-3 flex items-center gap-1.5"
+              disabled={isDeploying || agents.length === 0}
+            >
+              <ShieldCheck size={14} />
+              <span>{isDeploying ? 'Deploying Canary...' : 'Deploy Canary Token'}</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Rotate Confirmation Modal */}
+      <Modal
+        isOpen={rotateModalOpen}
+        onClose={() => setRotateModalOpen(false)}
         title="Confirm HoneyToken Rotation"
         actions={
           <>
-            <button className="btn btn-secondary" onClick={closeRotateModal} disabled={actionLoading}>
+            <button className="btn btn-secondary" onClick={() => setRotateModalOpen(false)} disabled={actionLoading}>
               Cancel
             </button>
             <button className="btn btn-danger" onClick={confirmRotate} disabled={actionLoading}>

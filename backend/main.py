@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from backend.api.routers import agents, ingestion, dashboard, honeytokens, agent_runtime, security_events, alerts, auth, demo
+from backend.api.routers import agents, ingestion, dashboard, honeytokens, agent_runtime, security_events, alerts, auth, demo, system, playground
 from backend.api.deps import limiter
 
 logger = logging.getLogger(__name__)
@@ -36,9 +36,16 @@ async def add_security_headers(request: Request, call_next):
     if os.getenv("ENVIRONMENT") == "production":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     
-    # Allow Vercel or localhost depending on environment, and Spline for 3D UI
-    frontend_url = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")[0]
-    response.headers["Content-Security-Policy"] = f"default-src 'self'; connect-src 'self' {frontend_url} https://prod.spline.design;"
+    # Allow frontend origins, Swagger UI, and Spline 3D assets
+    allowed_origins_list = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
+    csp_connect = " ".join(allowed_origins_list)
+    response.headers["Content-Security-Policy"] = (
+        f"default-src 'self'; "
+        f"connect-src 'self' {csp_connect} https://prod.spline.design; "
+        f"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        f"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        f"img-src 'self' data: https://fastapi.tiangolo.com;"
+    )
     return response
 
 # Request size limiting middleware
@@ -82,6 +89,8 @@ app.include_router(agent_runtime.router)
 app.include_router(security_events.router)
 app.include_router(alerts.router)
 app.include_router(demo.router)
+app.include_router(system.router)
+app.include_router(playground.router)
 
 @app.get("/health")
 def health_check():

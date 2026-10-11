@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { apiFetch } from '../services/api';
+import { apiFetch, createAgent } from '../services/api';
 import type { Agent } from '../services/api';
 import { SkeletonTable } from '../components/SkeletonLoader';
 import { Badge } from '../components/Badge';
 import { PageHeader } from '../components/PageHeader';
-import { Shield, ChevronLeft, ChevronRight, Server } from 'lucide-react';
+import Modal from '../components/Modal';
+import { useToast } from '../contexts/ToastContext';
+import { Shield, ChevronLeft, ChevronRight, Server, Plus, UserPlus } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const Agents: React.FC = () => {
@@ -13,22 +15,47 @@ const Agents: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [page, setPage] = useState(0);
+  const { showToast } = useToast();
   const LIMIT = 50;
 
+  // Register Agent Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [agentName, setAgentName] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
+
+  const loadAgents = async () => {
+    setLoading(true);
+    try {
+      const data = await apiFetch(`/agents?limit=${LIMIT}&offset=${page * LIMIT}`);
+      setAgents(data);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load agents');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadAgents = async () => {
-      setLoading(true);
-      try {
-        const data = await apiFetch(`/agents?limit=${LIMIT}&offset=${page * LIMIT}`);
-        setAgents(data);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load agents');
-      } finally {
-        setLoading(false);
-      }
-    };
     loadAgents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
+
+  const handleRegisterAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!agentName.trim()) return;
+    setIsRegistering(true);
+    try {
+      const created = await createAgent(agentName.trim());
+      showToast(`Agent "${created.name}" registered successfully`, 'success');
+      setModalOpen(false);
+      setAgentName('');
+      await loadAgents();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to register agent', 'error');
+    } finally {
+      setIsRegistering(false);
+    }
+  };
 
   return (
     <div className="dashboard-container flex flex-col h-full">
@@ -38,27 +65,36 @@ const Agents: React.FC = () => {
         icon={<Shield size={20} />}
         actions={
           <div className="flex items-center gap-3">
-            <button 
-              className="btn btn-secondary p-2" 
-              onClick={() => setPage(p => Math.max(0, p - 1))} 
-              disabled={page === 0 || loading}
-              aria-label="Previous Page"
-              title="Previous Page"
+            <button
+              className="btn btn-primary btn-accent text-xs flex items-center gap-1.5"
+              onClick={() => setModalOpen(true)}
             >
-              <ChevronLeft size={15} />
+              <Plus size={14} />
+              <span>Register Agent</span>
             </button>
-            <span className="text-sm font-medium text-secondary" style={{ minWidth: '60px', textAlign: 'center' }}>
-              Page {page + 1}
-            </span>
-            <button 
-              className="btn btn-secondary p-2" 
-              onClick={() => setPage(p => p + 1)} 
-              disabled={agents.length < LIMIT || loading}
-              aria-label="Next Page"
-              title="Next Page"
-            >
-              <ChevronRight size={15} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                className="btn btn-secondary p-2"
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0 || loading}
+                aria-label="Previous Page"
+                title="Previous Page"
+              >
+                <ChevronLeft size={15} />
+              </button>
+              <span className="text-sm font-medium text-secondary" style={{ minWidth: '60px', textAlign: 'center' }}>
+                Page {page + 1}
+              </span>
+              <button
+                className="btn btn-secondary p-2"
+                onClick={() => setPage(p => p + 1)}
+                disabled={agents.length < LIMIT || loading}
+                aria-label="Next Page"
+                title="Next Page"
+              >
+                <ChevronRight size={15} />
+              </button>
+            </div>
           </div>
         }
       />
@@ -85,7 +121,7 @@ const Agents: React.FC = () => {
           <div className="workspace-empty">
             <Server size={32} />
             <strong>No registered agents found</strong>
-            <span>Register an agent via the API or execute the Guided Security Demo.</span>
+            <span>Register an agent using the button above or execute the Guided Security Demo.</span>
           </div>
         ) : (
           <div className="table-container">
@@ -135,6 +171,50 @@ const Agents: React.FC = () => {
           </div>
         )}
       </motion.section>
+
+      {/* Register Agent Modal */}
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="Register Autonomous Agent"
+      >
+        <form onSubmit={handleRegisterAgent} className="flex flex-col gap-4">
+          <div className="form-group">
+            <label htmlFor="agent-name-input">Agent Name / Identifier</label>
+            <input
+              id="agent-name-input"
+              type="text"
+              placeholder="e.g. customer-support-agent, sql-analyst"
+              value={agentName}
+              onChange={(e) => setAgentName(e.target.value)}
+              required
+              autoFocus
+            />
+            <span className="text-xs text-tertiary mt-1">
+              The agent will be bound to your operator tenant with default active status and baseline 0.0 risk score.
+            </span>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-2">
+            <button
+              type="button"
+              className="btn btn-secondary text-xs py-2 px-3"
+              onClick={() => setModalOpen(false)}
+              disabled={isRegistering}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary btn-accent text-xs py-2 px-3 flex items-center gap-1.5"
+              disabled={isRegistering || !agentName.trim()}
+            >
+              <UserPlus size={14} />
+              <span>{isRegistering ? 'Registering...' : 'Register Agent'}</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

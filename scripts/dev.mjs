@@ -26,10 +26,15 @@ function portInUse(port, host) {
 }
 
 function resolvePython() {
-  const windows = path.join(root, 'backend', '.venv', 'Scripts', 'python.exe');
-  const posix = path.join(root, 'backend', '.venv', 'bin', 'python');
-  if (fs.existsSync(windows)) return windows;
-  if (fs.existsSync(posix)) return posix;
+  const candidates = [
+    path.join(root, 'backend', '.venv', 'Scripts', 'python.exe'),
+    path.join(root, '.venv', 'Scripts', 'python.exe'),
+    path.join(root, 'backend', '.venv', 'bin', 'python'),
+    path.join(root, '.venv', 'bin', 'python'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
   return null;
 }
 
@@ -90,12 +95,28 @@ let shuttingDown = false;
 let backend = null;
 let frontend = null;
 
+function killProcessTree(pid) {
+  if (!pid) return;
+  if (process.platform === 'win32') {
+    try {
+      spawn('taskkill', ['/F', '/T', '/PID', String(pid)], { stdio: 'ignore', windowsHide: true });
+    } catch {
+      // Ignore fallback
+    }
+  }
+}
+
 function shutdown(code = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
   for (const child of [frontend, backend]) {
-    if (child && !child.killed) {
-      child.kill();
+    if (child) {
+      if (child.pid) {
+        killProcessTree(child.pid);
+      }
+      if (!child.killed) {
+        child.kill();
+      }
     }
   }
   process.exit(code);

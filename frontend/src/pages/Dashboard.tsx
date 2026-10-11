@@ -14,8 +14,8 @@ import {
   Sparkles,
   Unplug,
 } from 'lucide-react';
-import { fetchDashboardStats, fetchRecentAgents, fetchRecentAlerts, fetchRecentEvents, isolateAgent } from '../services/api';
-import type { Agent, Alert, DashboardStats, SecurityEvent } from '../services/api';
+import { fetchDashboardStats, fetchRecentAgents, fetchRecentAlerts, fetchRecentEvents, isolateAgent, fetchSystemStatus } from '../services/api';
+import type { Agent, Alert, DashboardStats, SecurityEvent, SystemStatusResponse } from '../services/api';
 import { Badge } from '../components/Badge';
 import { PageHeader } from '../components/PageHeader';
 import { SpotlightCard } from '../components/SpotlightCard';
@@ -25,21 +25,6 @@ import GuidedDemo from '../components/GuidedDemo';
 import GridBackground from '../components/GridBackground';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
-
-export const parseEventMetadata = (event: SecurityEvent) => {
-  let category = '-';
-  let detector = '-';
-  if (event.evidence && typeof event.evidence.metadata === 'object' && event.evidence.metadata !== null) {
-    const metadata = event.evidence.metadata;
-    const detectors = Object.keys(metadata);
-    if (detectors.length > 0) {
-      detector = detectors.map((name) => name.replace('Detector', '')).join(', ');
-      const categories = detectors.map((name) => (metadata as any)[name]?.category).filter((value) => value && value !== 'safe');
-      if (categories.length > 0) category = Array.from(new Set(categories)).join(', ');
-    }
-  }
-  return { category, detector };
-};
 
 
 
@@ -105,19 +90,22 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isolatingAgentId, setIsolatingAgentId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [systemStatus, setSystemStatus] = useState<SystemStatusResponse | null>(null);
 
   const loadData = async () => {
     try {
-      const [statsData, eventsData, alertsData, agentsData] = await Promise.all([
+      const [statsData, eventsData, alertsData, agentsData, systemData] = await Promise.all([
         fetchDashboardStats(),
         fetchRecentEvents(20, 0),
         fetchRecentAlerts(20, 0),
         fetchRecentAgents(20, 0),
+        fetchSystemStatus().catch(() => null),
       ]);
       setStats(statsData);
       setEvents(eventsData);
       setAlerts(alertsData);
       setAgents(agentsData);
+      if (systemData) setSystemStatus(systemData);
       setError(null);
     } catch (err) {
       console.error(err);
@@ -130,7 +118,10 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    const interval = window.setInterval(() => fetchDashboardStats().then(setStats).catch(() => undefined), 30000);
+    const interval = window.setInterval(() => {
+      fetchDashboardStats().then(setStats).catch(() => undefined);
+      fetchSystemStatus().then(setSystemStatus).catch(() => undefined);
+    }, 30000);
     return () => window.clearInterval(interval);
   }, []);
 
@@ -223,6 +214,73 @@ const Dashboard: React.FC = () => {
       </section>
 
       {error && <div className="form-error">{error}</div>}
+
+      {systemStatus && (
+        <section
+          className="system-telemetry-strip glass-surface"
+          style={{
+            padding: '12px 18px',
+            borderRadius: 'var(--radius-lg)',
+            marginBottom: '1.25rem',
+            border: '1px solid var(--border-light)',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div
+              className="status-pulse-pill"
+              style={{
+                background: ['operational', 'healthy'].includes(systemStatus.status) ? 'var(--color-safe-bg)' : 'var(--color-medium-bg)',
+                borderColor: ['operational', 'healthy'].includes(systemStatus.status) ? 'var(--color-safe-border)' : 'var(--color-medium-border)',
+              }}
+            >
+              <span
+                className="status-pulse-dot"
+                style={{ background: ['operational', 'healthy'].includes(systemStatus.status) ? 'var(--color-safe)' : 'var(--color-medium)' }}
+              />
+              <span style={{ color: ['operational', 'healthy'].includes(systemStatus.status) ? 'var(--color-safe)' : 'var(--color-medium)', fontWeight: 600 }}>
+                SYSTEM {systemStatus.status.toUpperCase()}
+              </span>
+            </div>
+            <span className="mono text-xs text-secondary">
+              v{systemStatus.version} · Engine: <strong className="text-primary">{systemStatus.subsystems.database.engine}</strong> ({systemStatus.subsystems.database.status})
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+              <Sparkles size={12} className="text-accent" />
+              <span className="text-tertiary">AI Engine:</span>
+              <strong className="text-primary" style={{ textTransform: 'capitalize' }}>
+                {systemStatus.subsystems.ai_service.provider} ({systemStatus.subsystems.ai_service.model})
+              </strong>
+              <Badge variant={systemStatus.subsystems.ai_service.healthy ? 'safe' : 'default'} style={{ padding: '1px 5px', fontSize: '9px' }}>
+                {systemStatus.subsystems.ai_service.healthy ? 'LIVE' : 'FALLBACK'}
+              </Badge>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+              <ShieldCheck size={12} style={{ color: 'var(--color-safe)' }} />
+              <span className="text-tertiary">Semantic Firewall:</span>
+              <strong className="text-primary">
+                {systemStatus.subsystems.semantic_firewall.engine}
+              </strong>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+              <Database size={12} style={{ color: 'var(--color-low)' }} />
+              <span className="text-tertiary">Canary Decoys:</span>
+              <strong className="text-primary">
+                {systemStatus.subsystems.egress_gateway.active_honeytokens} Active
+              </strong>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="insight-strip" aria-label="Security metrics">
         {metricCards(stats).map((metric) => (
