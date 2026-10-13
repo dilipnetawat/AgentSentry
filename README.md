@@ -270,6 +270,17 @@ npm run lint
    - `VITE_API_BASE_URL=https://<your-render-backend>.onrender.com`
 
 ---
+## Quickstart (Docker)
+
+**Prerequisite:** Install and start [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+From the project folder, run:
+
+```powershell
+docker compose up -d --build
+docker compose ps
+```To stop the services:
+docker compose down
 
 ## License
 
