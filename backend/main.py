@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from backend.api.routers import agents, ingestion, dashboard, honeytokens, agent_runtime, security_events, alerts, auth, demo, system, playground
+from backend.api.routers import agents, ingestion, dashboard, honeytokens, agent_runtime, security_events, alerts, auth, demo, system, playground, policies
 from backend.api.deps import limiter
 
 logger = logging.getLogger(__name__)
@@ -91,6 +91,7 @@ app.include_router(alerts.router)
 app.include_router(demo.router)
 app.include_router(system.router)
 app.include_router(playground.router)
+app.include_router(policies.router)
 
 @app.get("/health")
 def health_check():

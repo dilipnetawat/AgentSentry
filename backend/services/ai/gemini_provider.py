@@ -13,7 +13,7 @@ class GeminiAIProvider(BaseAIProvider):
     Communicates with https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
     """
 
-    def __init__(self, api_key: str, model: str = "gemini-1.5-flash", timeout: float = 8.0):
+    def __init__(self, api_key: str, model: str = "gemini-3.8-flash", timeout: float = 15.0):
         self.api_key = api_key
         self._model_name = model
         self.timeout = timeout
@@ -186,24 +186,67 @@ class GeminiAIProvider(BaseAIProvider):
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        tools: Optional[list[Dict[str, Any]]] = None,
+        messages: Optional[list[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
-        """Invoke Google Gemini for permitted user prompts."""
+        """Invoke Google Gemini for permitted user prompts, supporting function calling."""
         if not self.api_key:
-            logger.info("Gemini API key missing; delegating to local engine.")
-            return await self.local_fallback.generate_response(prompt, system_prompt, context)
+            raise ValueError(
+                "Google Gemini provider is NOT CONFIGURED: GEMINI_API_KEY environment variable is missing. "
+                "Set GEMINI_API_KEY in backend/.env to enable live Gemini inference."
+            )
 
         import time
         start_time = time.time()
-        
-        full_prompt = prompt
-        if system_prompt:
-            full_prompt = f"System Instructions: {system_prompt}\n\nUser: {prompt}"
 
-        payload = {
-            "contents": [{"parts": [{"text": full_prompt}]}],
+        contents = []
+        if messages:
+            for m in messages:
+                role = m.get("role")
+                if role == "user":
+                    contents.append({"role": "user", "parts": [{"text": m.get("content", "")}]})
+                elif role == "assistant":
+                    parts = []
+                    if m.get("content"):
+                        parts.append({"text": m["content"]})
+                    for tc in (m.get("tool_calls") or []):
+                        fn = tc.get("function", {})
+                        parts.append({"functionCall": {"name": fn.get("name"), "args": fn.get("arguments", {})}})
+                    if parts:
+                        contents.append({"role": "model", "parts": parts})
+                elif role == "tool":
+                    contents.append({
+                        "role": "function",
+                        "parts": [{
+                            "functionResponse": {
+                                "name": m.get("name", "tool"),
+                                "response": {"result": m.get("content", "")}
+                            }
+                        }]
+                    })
+        else:
+            full_prompt = prompt
+            if system_prompt:
+                full_prompt = f"System Instructions: {system_prompt}\n\nUser: {prompt}"
+            contents.append({"role": "user", "parts": [{"text": full_prompt}]})
+
+        payload: Dict[str, Any] = {
+            "contents": contents,
             "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024}
         }
+        if tools:
+            payload["tools"] = [{
+                "functionDeclarations": [
+                    {
+                        "name": t["function"]["name"],
+                        "description": t["function"].get("description", ""),
+                        "parameters": t["function"].get("parameters", {})
+                    }
+                    for t in tools
+                    if "function" in t
+                ]
+            }]
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -211,13 +254,34 @@ class GeminiAIProvider(BaseAIProvider):
                 latency_ms = round((time.time() - start_time) * 1000, 1)
                 resp.raise_for_status()
                 data = resp.json()
-                text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                candidate = data["candidates"][0]
+                parts = candidate.get("content", {}).get("parts", [])
+
+                text_content = ""
+                parsed_tool_calls = None
+                for part in parts:
+                    if "text" in part:
+                        text_content += part["text"]
+                    if "functionCall" in part:
+                        fc = part["functionCall"]
+                        if parsed_tool_calls is None:
+                            parsed_tool_calls = []
+                        parsed_tool_calls.append({
+                            "id": f"call_gemini_{len(parsed_tool_calls)}",
+                            "type": "function",
+                            "function": {
+                                "name": fc.get("name"),
+                                "arguments": fc.get("args", {})
+                            }
+                        })
+
                 return {
-                    "content": text,
+                    "content": text_content.strip(),
+                    "tool_calls": parsed_tool_calls,
                     "provider": self.provider_name,
                     "model": self.model_name,
                     "latency_ms": latency_ms,
-                    "finish_reason": data["candidates"][0].get("finishReason", "stop")
+                    "finish_reason": candidate.get("finishReason", "stop")
                 }
         except Exception as e:
             logger.error(f"Gemini generation failed: {e}")

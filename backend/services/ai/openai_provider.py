@@ -101,29 +101,39 @@ class OpenAIProvider(BaseAIProvider):
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        tools: Optional[list[Dict[str, Any]]] = None,
+        messages: Optional[list[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
-        """Invoke OpenAI model for permitted user requests."""
+        """Invoke OpenAI model for permitted user requests, supporting native tool calling."""
         if not self.api_key:
-            logger.info("OpenAI API key missing; delegating to local engine.")
-            return await self.local_fallback.generate_response(prompt, system_prompt, context)
+            raise ValueError(
+                "OpenAI provider is NOT CONFIGURED: OPENAI_API_KEY environment variable is missing. "
+                "Set OPENAI_API_KEY in backend/.env to enable live OpenAI inference."
+            )
 
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
+        conv_messages = []
+        if messages:
+            conv_messages = list(messages)
         else:
-            messages.append({
-                "role": "system", 
-                "content": "You are a helpful and secure AI assistant protected by AgentSentry runtime firewall."
-            })
-        messages.append({"role": "user", "content": prompt})
+            if system_prompt:
+                conv_messages.append({"role": "system", "content": system_prompt})
+            else:
+                conv_messages.append({
+                    "role": "system", 
+                    "content": "You are a helpful and secure AI assistant protected by AgentSentry runtime firewall."
+                })
+            conv_messages.append({"role": "user", "content": prompt})
 
-        payload = {
+        payload: Dict[str, Any] = {
             "model": self.model_name,
-            "messages": messages,
+            "messages": conv_messages,
             "temperature": 0.7,
             "max_tokens": 1024
         }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
 
         start_time = time.time()
         try:
@@ -139,10 +149,34 @@ class OpenAIProvider(BaseAIProvider):
 
                 data = resp.json()
                 choice = data["choices"][0]
-                content = choice["message"].get("content", "").strip()
+                message = choice["message"]
+                content = (message.get("content") or "").strip()
+                raw_tool_calls = message.get("tool_calls")
+
+                parsed_tool_calls = None
+                if raw_tool_calls:
+                    parsed_tool_calls = []
+                    for tc in raw_tool_calls:
+                        fn = tc.get("function", {})
+                        fn_args = fn.get("arguments", "{}")
+                        if isinstance(fn_args, str):
+                            try:
+                                fn_args = json.loads(fn_args)
+                            except Exception:
+                                pass
+                        parsed_tool_calls.append({
+                            "id": tc.get("id"),
+                            "type": tc.get("type", "function"),
+                            "function": {
+                                "name": fn.get("name"),
+                                "arguments": fn_args
+                            }
+                        })
 
                 return {
                     "content": content,
+                    "tool_calls": parsed_tool_calls,
+                    "raw_message": message,
                     "provider": self.provider_name,
                     "model": self.model_name,
                     "latency_ms": latency_ms,

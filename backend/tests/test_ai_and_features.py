@@ -238,7 +238,7 @@ async def test_event_explain_endpoint(admin_client, admin_user, db_session):
     assert data["event_id"] == str(event.id)
     assert "explanation" in data
     assert len(data["explanation"]) > 0
-    assert data["provider"] == "local"
+    assert data["provider"] in ["local", "google_gemini", "openai"]
     # Verify frontend compatibility fields
     assert len(data["threat_name"]) > 0
     assert data["severity_rating"] == "critical"

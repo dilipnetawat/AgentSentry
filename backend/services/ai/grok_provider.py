@@ -213,32 +213,42 @@ class GrokAIProvider(BaseAIProvider):
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        tools: Optional[list[Dict[str, Any]]] = None,
+        messages: Optional[list[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
-        """Invoke xAI Grok for permitted user prompts."""
+        """Invoke xAI Grok for permitted user prompts, supporting native tool calling."""
         if not self.api_key:
-            logger.info("xAI API key missing; delegating to local engine.")
-            return await self.local_fallback.generate_response(prompt, system_prompt, context)
+            raise ValueError(
+                "xAI Grok provider is NOT CONFIGURED: XAI_API_KEY environment variable is missing. "
+                "Set XAI_API_KEY in backend/.env to enable live Grok inference."
+            )
 
         import time
         start_time = time.time()
 
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
+        conv_messages = []
+        if messages:
+            conv_messages = list(messages)
         else:
-            messages.append({"role": "system", "content": "You are a helpful assistant running behind AgentSentry firewall."})
-        messages.append({"role": "user", "content": prompt})
+            if system_prompt:
+                conv_messages.append({"role": "system", "content": system_prompt})
+            else:
+                conv_messages.append({"role": "system", "content": "You are a helpful assistant running behind AgentSentry firewall."})
+            conv_messages.append({"role": "user", "content": prompt})
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        payload = {
+        payload: Dict[str, Any] = {
             "model": self.model_name,
-            "messages": messages,
+            "messages": conv_messages,
             "temperature": 0.7
         }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -247,8 +257,34 @@ class GrokAIProvider(BaseAIProvider):
                 resp.raise_for_status()
                 data = resp.json()
                 choice = data["choices"][0]
+                message = choice["message"]
+                content = (message.get("content") or "").strip()
+                raw_tool_calls = message.get("tool_calls")
+
+                parsed_tool_calls = None
+                if raw_tool_calls:
+                    parsed_tool_calls = []
+                    for tc in raw_tool_calls:
+                        fn = tc.get("function", {})
+                        fn_args = fn.get("arguments", "{}")
+                        if isinstance(fn_args, str):
+                            try:
+                                fn_args = json.loads(fn_args)
+                            except Exception:
+                                pass
+                        parsed_tool_calls.append({
+                            "id": tc.get("id"),
+                            "type": tc.get("type", "function"),
+                            "function": {
+                                "name": fn.get("name"),
+                                "arguments": fn_args
+                            }
+                        })
+
                 return {
-                    "content": choice["message"]["content"].strip(),
+                    "content": content,
+                    "tool_calls": parsed_tool_calls,
+                    "raw_message": message,
                     "provider": self.provider_name,
                     "model": self.model_name,
                     "latency_ms": latency_ms,

@@ -32,7 +32,7 @@ class AIServiceManager:
 
         # 3. Instantiate Google Gemini provider
         gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
-        gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip()
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
         self._providers_cache["gemini"] = GeminiAIProvider(api_key=gemini_key, model=gemini_model)
 
         # 4. Instantiate xAI Grok provider

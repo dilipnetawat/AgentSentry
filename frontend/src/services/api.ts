@@ -393,6 +393,34 @@ export interface PipelineStageTrace {
   detectors?: Record<string, any>;
 }
 
+export interface MatchedRuleDetail {
+  rule_id: string;
+  category: string;
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | string;
+  name: string;
+  description: string;
+  score: number;
+  matched_excerpt: string;
+  mitigation: string;
+  version?: string;
+}
+
+export interface LocalEngineDetails {
+  engine_name: string;
+  mode: string;
+  detected: boolean;
+  risk_score: number;
+  risk_band: 'LOW' | 'SUSPICIOUS' | 'HIGH' | string;
+  primary_category: string;
+  recommended_action: 'ALLOW' | 'QUARANTINE' | 'BLOCK' | string;
+  matched_rules: MatchedRuleDetail[];
+  matched_indicators: string[];
+  transformations_applied: string[];
+  decoded_payloads: Array<{ encoding: string; decoded_payload: string }>;
+  coverage_limitation: string;
+  metadata?: Record<string, any>;
+}
+
 export interface PlaygroundExecutionResponse {
   execution_id: string;
   timestamp: string;
@@ -401,21 +429,35 @@ export interface PlaygroundExecutionResponse {
   prompt: string;
   provider: string;
   model: string;
+  test_mode?: 'live_ai' | 'analysis_only' | string;
   decision: 'ALLOW' | 'BLOCK' | 'QUARANTINE';
   risk_score: number;
+  defense_score?: number;
+  defense_status?: 'PASSED' | 'FAILED' | 'WARNING' | 'INCONCLUSIVE' | string;
+  defense_summary?: string;
+  defense_recommendations?: string[];
   reason: string;
   latency_ms: number;
   ai_response?: string;
   tool_execution?: {
     tool: string;
-    status: 'AUTHORIZED' | 'DENIED';
+    status: 'AUTHORIZED' | 'DENIED' | 'VALIDATION_ERROR' | 'UNAVAILABLE' | 'EXECUTION_ERROR' | string;
     reason?: string;
     output?: any;
+    mcp_server?: string;
+    arguments?: any;
+    invoked_by?: string;
   };
+  model_tool_calls?: Array<{
+    id?: string;
+    type?: string;
+    function?: { name?: string; arguments?: any };
+  }>;
   security_event_id?: string;
   alert_id?: string;
   forensic_explanation?: string;
   detector_breakdown?: Record<string, any>;
+  local_engine_details?: LocalEngineDetails;
   pipeline_trace: PipelineStageTrace[];
 }
 
@@ -453,10 +495,13 @@ export const fetchPlaygroundScenarios = async (): Promise<ScenarioPreset[]> => {
 
 export const executePlaygroundRequest = async (payload: {
   prompt: string;
+  test_mode?: 'live_ai' | 'analysis_only';
   provider?: string;
   agent_id?: string;
   system_prompt?: string;
   requested_tool?: { name: string; arguments?: Record<string, any> };
+  enable_mcp_tools?: boolean;
+  max_iterations?: number;
 }): Promise<PlaygroundExecutionResponse> => {
   return apiFetch('/playground/execute', {
     method: 'POST',
@@ -470,5 +515,58 @@ export const approveQuarantinedEvent = async (eventId: string): Promise<{ status
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
+};
+
+export interface PolicyRule {
+  rule_id: string;
+  category: string;
+  name: string;
+  description: string;
+  severity: string;
+  base_score: number;
+  mitigation: string;
+  version: string;
+  pattern_count: number;
+  negative_context_count: number;
+  status: string;
+  enforcement: 'BLOCK' | 'QUARANTINE' | 'ALLOW' | string;
+}
+
+export interface AuthorizedToolPolicy {
+  server: string;
+  tool_name: string;
+  capability: string;
+  read_only: boolean;
+  max_timeout_sec: number;
+  status: string;
+}
+
+export interface SecurityPoliciesResponse {
+  framework: string;
+  thresholds: {
+    block_threshold: number;
+    quarantine_threshold: number;
+    allow_threshold: number;
+    description: string;
+  };
+  engine_mode: string;
+  rules_count: number;
+  rules: PolicyRule[];
+  tool_authorization: {
+    default_action: string;
+    enforcement_mode: string;
+    disallowed_argument_patterns: string[];
+    authorized_tools: AuthorizedToolPolicy[];
+  };
+  canary_mesh_policy: {
+    strategy: string;
+    leak_action: string;
+    token_types: string[];
+    rotation_interval_days: number;
+  };
+}
+
+export const fetchSecurityPolicies = async (): Promise<SecurityPoliciesResponse> => {
+  return apiFetch('/policies');
 };
 

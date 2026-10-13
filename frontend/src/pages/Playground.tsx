@@ -1,33 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Cpu,
+  Shield,
   ShieldAlert,
   ShieldCheck,
   AlertTriangle,
   Terminal,
-  CheckCircle2,
-  XCircle,
   Copy,
   Check,
   Play,
   Wrench,
   Sparkles,
-  Lock,
   Layers,
-  ChevronDown,
-  ChevronUp,
+  RotateCw,
   ExternalLink,
-  Activity,
-  AlertOctagon,
-  CheckCheck
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  BookOpen
 } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 
-import AppShell from '../components/AppShell';
 import { PageHeader } from '../components/PageHeader';
-import { SpotlightCard } from '../components/SpotlightCard';
-import { Badge, type BadgeVariant } from '../components/Badge';
+import { DecisionBadge } from '../components/Badge';
 import { useToast } from '../contexts/ToastContext';
 import {
   fetchAIProviders,
@@ -42,6 +37,11 @@ import {
 
 const Playground: React.FC = () => {
   const { showToast } = useToast();
+  const location = useLocation();
+
+  // Tab State: Custom Prompt vs Example Prompts
+  const [activeTab, setActiveTab] = useState<'custom' | 'examples'>('custom');
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(false);
 
   // State
   const [providers, setProviders] = useState<AIProviderInfo[]>([]);
@@ -50,19 +50,24 @@ const Playground: React.FC = () => {
 
   const [scenarios, setScenarios] = useState<ScenarioPreset[]>([]);
   const [activeScenario, setActiveScenario] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   const [prompt, setPrompt] = useState<string>('');
   const [systemPrompt, setSystemPrompt] = useState<string>('');
   const [showSystemPrompt, setShowSystemPrompt] = useState<boolean>(false);
-  const [selectedTool, setSelectedTool] = useState<string>('none');
+  const [selectedTool, setSelectedTool] = useState<string>('autonomous');
+  const [testMode, setTestMode] = useState<'live_ai' | 'analysis_only'>('live_ai');
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [executionError, setExecutionError] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [executionResult, setExecutionResult] = useState<PlaygroundExecutionResponse | null>(null);
   const [copiedResponse, setCopiedResponse] = useState<boolean>(false);
+  const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false);
   const [approvingEvent, setApprovingEvent] = useState<boolean>(false);
-  const [showDetectorDetails, setShowDetectorDetails] = useState<boolean>(false);
+  const [showDetails, setShowDetails] = useState<boolean>(false);
 
-  const loadProviders = React.useCallback(async () => {
+  const loadProviders = useCallback(async () => {
     try {
       const data = await fetchAIProviders();
       setProviders(data);
@@ -73,7 +78,7 @@ const Playground: React.FC = () => {
     }
   }, [showToast]);
 
-  const loadScenarios = React.useCallback(async () => {
+  const loadScenarios = useCallback(async () => {
     try {
       const data = await fetchPlaygroundScenarios();
       setScenarios(data);
@@ -82,13 +87,21 @@ const Playground: React.FC = () => {
     }
   }, []);
 
-  // Load providers and scenarios on mount
   useEffect(() => {
     loadProviders();
     loadScenarios();
   }, [loadProviders, loadScenarios]);
 
-  const handleTestProvider = async (providerId: string) => {
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const cat = params.get('category');
+    if (cat) {
+      setSelectedCategory(cat);
+    }
+  }, [location.search]);
+
+  const handleTestProvider = async (e: React.MouseEvent, providerId: string) => {
+    e.stopPropagation();
     setTestingProvider(providerId);
     try {
       const res = await testAIProvider(providerId);
@@ -107,58 +120,102 @@ const Playground: React.FC = () => {
   const handleApplyScenario = (preset: ScenarioPreset) => {
     setActiveScenario(preset.id);
     setPrompt(preset.prompt);
+    setValidationError(null);
+    setExecutionError(null);
     setSystemPrompt(preset.system_prompt || '');
     if (preset.system_prompt) setShowSystemPrompt(true);
 
     if (preset.requested_tool) {
       setSelectedTool(preset.requested_tool.name);
+      setShowAdvancedOptions(true);
     } else {
-      setSelectedTool('none');
+      setSelectedTool('autonomous');
     }
 
+    setActiveTab('custom');
     showToast(`Loaded "${preset.title}" — Expected: ${preset.expected_decision}`, 'info');
   };
 
   const handleExecute = async () => {
-    if (!prompt.trim()) {
-      showToast('Please enter a prompt or choose a judge test scenario.', 'warning');
+    if (!prompt || !prompt.trim()) {
+      setValidationError("Please enter or paste a prompt to test your AI agent's security.");
+      showToast('Please enter a prompt or choose a preset test scenario.', 'warning');
       return;
     }
 
+    if (prompt.length > 50000) {
+      setValidationError('Prompt exceeds maximum length of 50,000 characters.');
+      showToast('Prompt exceeds maximum length of 50,000 characters.', 'warning');
+      return;
+    }
+
+    setValidationError(null);
+    setExecutionError(null);
     setIsLoading(true);
     setExecutionResult(null);
 
     let requested_tool_payload = undefined;
-    if (selectedTool !== 'none') {
-      if (selectedTool === 'execute_shell') {
-        requested_tool_payload = { name: 'execute_shell', arguments: { command: 'rm -rf /' } };
-      } else if (selectedTool === 'read_database') {
-        requested_tool_payload = { name: 'read_database', arguments: { query: 'SELECT * FROM clients' } };
-      } else if (selectedTool === 'fetch_url') {
-        requested_tool_payload = { name: 'fetch_url', arguments: { url: 'https://api.internal-finance.com/v1/summary' } };
-      } else if (selectedTool === 'send_notification') {
-        requested_tool_payload = { name: 'send_notification', arguments: { channel: 'soc-ops', message: 'Test message' } };
-      }
+    let enable_mcp_tools = true;
+
+    if (selectedTool === 'none') {
+      enable_mcp_tools = false;
+    } else if (selectedTool === 'autonomous') {
+      enable_mcp_tools = true;
+      requested_tool_payload = undefined;
+    } else if (selectedTool === 'get_system_health') {
+      requested_tool_payload = { name: 'get_system_health', arguments: { include_metrics: true } };
+    } else if (selectedTool === 'get_recent_security_events') {
+      requested_tool_payload = { name: 'get_recent_security_events', arguments: { limit: 5 } };
+    } else if (selectedTool === 'inspect_agent_posture') {
+      requested_tool_payload = { name: 'inspect_agent_posture', arguments: { agent_name: 'Playground-Security-Agent' } };
+    } else if (selectedTool === 'github_read_issues') {
+      requested_tool_payload = { name: 'github_read_issues', arguments: { repository: 'dilipnetawat/AgentSentry', state: 'open', limit: 5 } };
+    } else if (selectedTool === 'github_list_repositories') {
+      requested_tool_payload = { name: 'github_list_repositories', arguments: { limit: 10 } };
+    } else if (selectedTool === 'execute_arbitrary_script') {
+      requested_tool_payload = { name: 'execute_arbitrary_script', arguments: { command: 'rm -rf /var/log/*' } };
+    } else if (selectedTool === 'execute_shell') {
+      requested_tool_payload = { name: 'execute_shell', arguments: { command: 'cat /etc/passwd' } };
+    } else if (selectedTool === 'read_database') {
+      requested_tool_payload = { name: 'read_database', arguments: { query: 'SELECT * FROM client_secrets' } };
+    } else if (selectedTool === 'fetch_url') {
+      requested_tool_payload = { name: 'fetch_url', arguments: { url: 'https://internal-vault.corp/api/keys' } };
+    } else if (selectedTool === 'send_notification') {
+      requested_tool_payload = { name: 'send_notification', arguments: { channel: 'soc-ops', message: 'Exfiltrated token payload' } };
     }
 
     try {
       const result = await executePlaygroundRequest({
-        prompt,
+        prompt: prompt.trim(),
+        test_mode: testMode,
         provider: selectedProvider,
         system_prompt: showSystemPrompt && systemPrompt ? systemPrompt : undefined,
         requested_tool: requested_tool_payload,
+        enable_mcp_tools,
+        max_iterations: 3,
       });
 
       setExecutionResult(result);
 
-      if (result.decision === 'ALLOW') {
-        showToast(`Request Permitted (ALLOW) in ${result.latency_ms}ms (Risk: ${result.risk_score}/100)`, 'success');
-      } else if (result.decision === 'BLOCK') {
-        showToast(`Threat Blocked (BLOCK) at firewall (Risk: ${result.risk_score}/100)`, 'error');
+      if (testMode === 'analysis_only') {
+        if (result.decision === 'BLOCK') {
+          showToast(`Threat Blocked (BLOCK) in Analysis Mode (Risk: ${result.risk_score}/100)`, 'error');
+        } else if (result.decision === 'QUARANTINE') {
+          showToast(`Quarantined (QUARANTINE) pending approval (Risk: ${result.risk_score}/100)`, 'warning');
+        } else {
+          showToast(`Security Analysis Complete: Clean Request in ${result.latency_ms}ms`, 'success');
+        }
       } else {
-        showToast(`Quarantined (QUARANTINE) pending approval (Risk: ${result.risk_score}/100)`, 'warning');
+        if (result.decision === 'ALLOW') {
+          showToast(`Request Permitted (ALLOW) in ${result.latency_ms}ms (Risk: ${result.risk_score}/100)`, 'success');
+        } else if (result.decision === 'BLOCK') {
+          showToast(`Threat Blocked (BLOCK) by Firewall (Risk: ${result.risk_score}/100)`, 'error');
+        } else {
+          showToast(`Quarantined (QUARANTINE) pending approval (Risk: ${result.risk_score}/100)`, 'warning');
+        }
       }
     } catch (err: any) {
+      setExecutionError(err.message || 'An error occurred during playground execution.');
       showToast(err.message || 'An error occurred during playground execution.', 'error');
     } finally {
       setIsLoading(false);
@@ -170,7 +227,7 @@ const Playground: React.FC = () => {
       navigator.clipboard.writeText(executionResult.ai_response);
       setCopiedResponse(true);
       setTimeout(() => setCopiedResponse(false), 2000);
-      showToast('AI response text copied to clipboard.', 'info');
+      showToast('AI model output copied to clipboard.', 'info');
     }
   };
 
@@ -179,7 +236,7 @@ const Playground: React.FC = () => {
     setApprovingEvent(true);
     try {
       const res = await approveQuarantinedEvent(executionResult.security_event_id);
-      showToast(`Quarantine Approved by ${res.reviewer}. Event updated in SOC history.`, 'success');
+      showToast(`Quarantine Approved by ${res.reviewer}. Security event updated.`, 'success');
       setExecutionResult((prev) => (prev ? { ...prev, decision: 'ALLOW' } : null));
     } catch (err: any) {
       showToast(err.message || 'Failed to approve event.', 'error');
@@ -188,693 +245,1352 @@ const Playground: React.FC = () => {
     }
   };
 
-  return (
-    <AppShell>
-      <PageHeader
-        title="Secure AI Playground"
-        description="Live Prompt-Injection Defense, Semantic Firewall Evaluation & Tool Boundary Enforcement Console"
-        icon={<Terminal size={22} />}
-      />
+  // Render Defense Output Console
+  const renderOutputConsole = () => {
+    if (isLoading) {
+      return (
+        <div className="workspace-empty" style={{ minHeight: '320px' }}>
+          <RotateCw size={32} className="animate-spin text-accent" />
+          <strong>Inspecting Payload</strong>
+          <span>Running Regex Heuristics, FastEmbed Cosine Similarity, and Policy Evaluation...</span>
+        </div>
+      );
+    }
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '3rem' }}>
-        {/* PROVIDER SELECTION & HEALTH STATUS BAR */}
-        <SpotlightCard className="p-5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div style={{ padding: '0.5rem', borderRadius: '0.5rem', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--color-accent)' }}>
-                <Cpu size={22} />
+    if (!executionResult) {
+      return (
+        <div className="workspace-empty" style={{ minHeight: '320px' }}>
+          <Terminal size={32} />
+          <strong>Awaiting Playground Input</strong>
+          <span>Select a scenario on the left and click "Execute & Analyze Security Defense" to view real firewall inspection results.</span>
+        </div>
+      );
+    }
+
+    const result = executionResult;
+
+    return (
+      <div>
+        {/* Transparent Defense Scorecard Banner */}
+        <div
+          className="defense-scorecard-banner"
+          style={{
+            border: `1px solid ${
+              result.defense_status === 'PASSED'
+                ? 'var(--color-safe-border)'
+                : result.defense_status === 'INCONCLUSIVE'
+                ? 'var(--color-medium-border)'
+                : 'var(--color-critical-border)'
+            }`,
+            background:
+              result.defense_status === 'PASSED'
+                ? 'rgba(16, 185, 129, 0.08)'
+                : result.defense_status === 'INCONCLUSIVE'
+                ? 'var(--color-medium-bg)'
+                : 'var(--color-critical-bg)',
+          }}
+        >
+          <div className="flex items-center gap-3">
+            {result.defense_status === 'PASSED' ? (
+              <ShieldCheck size={28} style={{ color: 'var(--color-safe)' }} />
+            ) : result.defense_status === 'INCONCLUSIVE' ? (
+              <AlertTriangle size={28} style={{ color: 'var(--color-medium)' }} />
+            ) : (
+              <ShieldAlert size={28} style={{ color: 'var(--color-critical)' }} />
+            )}
+            <div>
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <DecisionBadge decision={result.decision} />
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    background:
+                      result.defense_status === 'PASSED'
+                        ? 'var(--color-safe-bg)'
+                        : result.defense_status === 'INCONCLUSIVE'
+                        ? 'var(--color-medium-bg)'
+                        : 'var(--color-critical-bg)',
+                    color:
+                      result.defense_status === 'PASSED'
+                        ? 'var(--color-safe)'
+                        : result.defense_status === 'INCONCLUSIVE'
+                        ? 'var(--color-medium)'
+                        : 'var(--color-critical)',
+                    border: `1px solid ${
+                      result.defense_status === 'PASSED'
+                        ? 'var(--color-safe-border)'
+                        : result.defense_status === 'INCONCLUSIVE'
+                        ? 'var(--color-medium-border)'
+                        : 'var(--color-critical-border)'
+                    }`
+                  }}
+                >
+                  {result.defense_status === 'PASSED'
+                    ? 'DEFENSE PASSED / PROTECTED'
+                    : result.defense_status === 'INCONCLUSIVE'
+                    ? 'INCONCLUSIVE / QUARANTINED'
+                    : 'DEFENSE BREACHED / FAILED'}
+                </span>
+                <span
+                  className="mono text-xs px-2 py-0.5 rounded"
+                  style={{
+                    fontSize: '0.68rem',
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-light)',
+                    color: 'var(--text-secondary)'
+                  }}
+                >
+                  {result.test_mode === 'analysis_only' ? 'MODE: ANALYSIS ONLY' : 'MODE: LIVE AI TEST'}
+                </span>
               </div>
-              <div>
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text)' }}>AI Engine Provider</h3>
-                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-                  Select the active generation model for permitted requests
+              <span className="text-xs text-primary font-medium block">
+                {result.defense_summary || result.reason || 'Security evaluation completed.'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* Defense Score Box */}
+            <div className="defense-score-box">
+              <span
+                className="defense-score-number"
+                style={{
+                  color:
+                    (result.defense_score ?? 100) >= 80
+                      ? 'var(--color-safe)'
+                      : (result.defense_score ?? 100) >= 50
+                      ? 'var(--color-medium)'
+                      : 'var(--color-critical)',
+                }}
+              >
+                {result.defense_score ?? (result.decision === 'BLOCK' ? 100 : result.decision === 'QUARANTINE' ? 75 : 100)}/100
+              </span>
+              <span className="defense-score-label text-tertiary">DEFENSE SCORE</span>
+              <span className="mono text-xs text-tertiary mt-0.5" style={{ fontSize: '0.68rem' }}>Protection rating</span>
+            </div>
+
+            {/* Threat Score Box */}
+            <div className="defense-score-box" style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: '1rem' }}>
+              <span
+                className="defense-score-number"
+                style={{
+                  color:
+                    result.risk_score >= 70
+                      ? 'var(--color-critical)'
+                      : result.risk_score >= 30
+                      ? 'var(--color-medium)'
+                      : 'var(--color-safe)',
+                }}
+              >
+                {result.risk_score}/100
+              </span>
+              <span className="defense-score-label text-tertiary">THREAT RISK</span>
+              <span className="mono text-xs text-tertiary mt-0.5" style={{ fontSize: '0.68rem' }}>Adversarial intensity</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Tested Prompt Inspector */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-semibold text-secondary flex items-center gap-1.5">
+              <Terminal size={13} className="text-accent" />
+              <span>Tested Prompt Payload:</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-tertiary mono">
+                {result.prompt.length.toLocaleString()} chars
+              </span>
+              <button
+                type="button"
+                className="btn btn-secondary text-xs"
+                onClick={() => {
+                  navigator.clipboard.writeText(result.prompt);
+                  setCopiedPrompt(true);
+                  setTimeout(() => setCopiedPrompt(false), 2000);
+                  showToast('Tested prompt copied to clipboard', 'info');
+                }}
+                style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+              >
+                {copiedPrompt ? <Check size={11} className="text-safe" /> : <Copy size={11} />}
+                <span>{copiedPrompt ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+          </div>
+          <div
+            style={{
+              padding: '0.75rem',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-light)',
+              fontSize: '0.8rem',
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--text-primary)',
+              lineHeight: 1.45,
+              maxHeight: '130px',
+              overflowY: 'auto',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}
+          >
+            {result.prompt}
+          </div>
+        </div>
+
+        {/* Actionable Defensive Recommendations (if provided) */}
+        {result.defense_recommendations && result.defense_recommendations.length > 0 && (
+          <div
+            style={{
+              padding: '0.85rem 1rem',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--bg-surface-elevated)',
+              border: '1px solid var(--border-light)',
+              marginBottom: '1.25rem',
+            }}
+          >
+            <div className="flex items-center gap-1.5 mb-2">
+              <Shield size={14} className="text-accent" />
+              <strong className="text-xs text-primary">Defensive Hardening Recommendations:</strong>
+            </div>
+            <ul className="recommendations-list">
+              {result.defense_recommendations.map((rec, i) => (
+                <li key={i} className="recommendation-item">
+                  <span className="recommendation-bullet">✓</span>
+                  <span>{rec}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Observed Behavior & Evidence Box */}
+        <div
+          style={{
+            padding: '0.85rem 1rem',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--bg-surface-elevated)',
+            border: '1px solid var(--border-subtle)',
+            marginBottom: '1.25rem',
+          }}
+        >
+          <span className="text-xs font-semibold text-secondary block mb-1">Observed Behavior & Evidence:</span>
+          <p className="text-xs text-secondary m-0 leading-relaxed">
+            {result.forensic_explanation || result.reason || 'Input evaluated by Semantic Firewall.'}
+          </p>
+          {result.detector_breakdown && (
+            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-subtle flex-wrap text-xs">
+              <span className="text-tertiary">Detectors:</span>
+              {Object.entries(result.detector_breakdown).map(([k, v]: [string, any]) => (
+                <span
+                  key={k}
+                  className="mono text-xs px-1.5 py-0.5 rounded"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+                >
+                  {k}: {typeof v === 'object' && v !== null ? v.decision || v.matched || 'FLAGGED' : String(v)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Local Security Engine Inspection Section */}
+        {result.local_engine_details && (
+          <div
+            style={{
+              padding: '1rem',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--bg-surface-elevated)',
+              border: '1px solid var(--border-medium)',
+              marginBottom: '1.25rem',
+            }}
+          >
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={16} className="text-accent-cyan" />
+                <strong className="text-xs text-primary font-mono">
+                  Local Security Engine Breakdown
+                </strong>
+                <span
+                  style={{
+                    fontSize: '0.65rem',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    background: 'rgba(34, 200, 245, 0.12)',
+                    color: 'var(--accent-cyan)',
+                    border: '1px solid rgba(34, 200, 245, 0.25)',
+                    fontWeight: 600,
+                  }}
+                >
+                  Air-Gapped / No External AI Required
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className="mono text-xs px-2 py-0.5 rounded"
+                  style={{
+                    fontSize: '0.68rem',
+                    background:
+                      result.local_engine_details.risk_band === 'HIGH'
+                        ? 'var(--color-critical-bg)'
+                        : result.local_engine_details.risk_band === 'SUSPICIOUS'
+                        ? 'var(--color-medium-bg)'
+                        : 'var(--color-safe-bg)',
+                    color:
+                      result.local_engine_details.risk_band === 'HIGH'
+                        ? 'var(--color-critical)'
+                        : result.local_engine_details.risk_band === 'SUSPICIOUS'
+                        ? 'var(--color-medium)'
+                        : 'var(--color-safe)',
+                    border: `1px solid ${
+                      result.local_engine_details.risk_band === 'HIGH'
+                        ? 'var(--color-critical-border)'
+                        : result.local_engine_details.risk_band === 'SUSPICIOUS'
+                        ? 'var(--color-medium-border)'
+                        : 'var(--color-safe-border)'
+                    }`,
+                    fontWeight: 600,
+                  }}
+                >
+                  BAND: {result.local_engine_details.risk_band} ({result.local_engine_details.risk_score}/100)
+                </span>
+                <span
+                  className="mono text-xs px-2 py-0.5 rounded font-bold"
+                  style={{
+                    fontSize: '0.68rem',
+                    background:
+                      result.local_engine_details.recommended_action === 'BLOCK'
+                        ? 'var(--color-critical-bg)'
+                        : result.local_engine_details.recommended_action === 'QUARANTINE'
+                        ? 'var(--color-medium-bg)'
+                        : 'var(--color-safe-bg)',
+                    color:
+                      result.local_engine_details.recommended_action === 'BLOCK'
+                        ? 'var(--color-critical)'
+                        : result.local_engine_details.recommended_action === 'QUARANTINE'
+                        ? 'var(--color-medium)'
+                        : 'var(--color-safe)',
+                    border: `1px solid ${
+                      result.local_engine_details.recommended_action === 'BLOCK'
+                        ? 'var(--color-critical-border)'
+                        : result.local_engine_details.recommended_action === 'QUARANTINE'
+                        ? 'var(--color-medium-border)'
+                        : 'var(--color-safe-border)'
+                    }`,
+                  }}
+                >
+                  {result.local_engine_details.recommended_action}
                 </span>
               </div>
             </div>
 
-            {/* Provider Pills */}
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              {providers.map((p) => {
-                const isSelected = selectedProvider === p.id;
-                const isOnline = p.status === 'operational';
-                const isConfigured = p.is_configured;
+            {/* Input Normalization Transformations */}
+            {result.local_engine_details.transformations_applied &&
+              result.local_engine_details.transformations_applied.length > 0 && (
+                <div className="mb-3 p-2 rounded bg-surface border border-subtle">
+                  <span className="text-[11px] font-semibold text-tertiary block mb-1">
+                    Input Transformations Applied (Deobfuscation):
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {result.local_engine_details.transformations_applied.map((t, idx) => (
+                      <span
+                        key={idx}
+                        className="mono text-[10px] px-2 py-0.5 rounded"
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid var(--border-light)',
+                          color: 'var(--accent-cyan)',
+                        }}
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => setSelectedProvider(p.id)}
-                    type="button"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      padding: '0.5rem 0.85rem',
-                      borderRadius: '0.5rem',
-                      fontSize: '0.85rem',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      border: isSelected ? '1px solid var(--color-accent)' : '1px solid var(--color-border)',
-                      background: isSelected ? 'rgba(59, 130, 246, 0.15)' : 'var(--color-surface-subtle)',
-                      color: isSelected ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <span
+            {/* Decoded Payloads if Base64 extracted */}
+            {result.local_engine_details.decoded_payloads &&
+              result.local_engine_details.decoded_payloads.length > 0 && (
+                <div className="mb-3 p-2 rounded bg-surface border border-subtle">
+                  <span className="text-[11px] font-semibold text-tertiary block mb-1">
+                    Extracted Obfuscated Payloads:
+                  </span>
+                  {result.local_engine_details.decoded_payloads.map((dp, idx) => (
+                    <div key={idx} className="mono text-[11px] text-secondary break-all">
+                      <span className="text-tertiary">[{dp.encoding}]: </span>
+                      <code>{dp.decoded_payload}</code>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            {/* Matched Rules List */}
+            {result.local_engine_details.matched_rules &&
+            result.local_engine_details.matched_rules.length > 0 ? (
+              <div className="mb-3">
+                <span className="text-xs font-semibold text-secondary block mb-2">
+                  Triggered Heuristic Security Rules ({result.local_engine_details.matched_rules.length}):
+                </span>
+                <div className="space-y-2">
+                  {result.local_engine_details.matched_rules.map((rule, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 rounded border border-light"
                       style={{
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        backgroundColor: isOnline
-                          ? 'var(--color-safe)'
-                          : isConfigured
-                          ? 'var(--color-warning)'
-                          : 'var(--color-text-muted)',
+                        background: 'var(--bg-surface)',
+                        borderLeft: `3px solid ${
+                          rule.severity === 'CRITICAL'
+                            ? 'var(--color-critical)'
+                            : rule.severity === 'HIGH'
+                            ? '#f97316'
+                            : rule.severity === 'MEDIUM'
+                            ? 'var(--color-medium)'
+                            : 'var(--color-safe)'
+                        }`,
                       }}
-                    />
-                    <span>{p.display_name}</span>
-                    <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({p.model})</span>
-                  </button>
-                );
-              })}
-            </div>
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="mono text-xs font-bold px-1.5 py-0.5 rounded"
+                            style={{ background: 'rgba(255, 255, 255, 0.08)', color: 'var(--text-primary)' }}
+                          >
+                            {rule.rule_id}
+                          </span>
+                          <strong className="text-xs text-primary">{rule.name}</strong>
+                          <span
+                            className="mono text-[10px] px-1.5 py-0.5 rounded text-tertiary"
+                            style={{ background: 'rgba(255, 255, 255, 0.04)' }}
+                          >
+                            {rule.category}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="mono text-[10px] font-bold px-1.5 py-0.5 rounded"
+                            style={{
+                              background:
+                                rule.severity === 'CRITICAL'
+                                  ? 'var(--color-critical-bg)'
+                                  : rule.severity === 'HIGH'
+                                  ? 'rgba(249, 115, 22, 0.15)'
+                                  : rule.severity === 'MEDIUM'
+                                  ? 'var(--color-medium-bg)'
+                                  : 'var(--color-safe-bg)',
+                              color:
+                                rule.severity === 'CRITICAL'
+                                  ? 'var(--color-critical)'
+                                  : rule.severity === 'HIGH'
+                                  ? '#fb923c'
+                                  : rule.severity === 'MEDIUM'
+                                  ? 'var(--color-medium)'
+                                  : 'var(--color-safe)',
+                            }}
+                          >
+                            {rule.severity}
+                          </span>
+                          <span className="mono text-xs font-semibold text-secondary">
+                            +{rule.score} pts
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-secondary m-0 mb-1 leading-snug">{rule.description}</p>
+                      {rule.matched_excerpt && (
+                        <div className="mono text-[11px] p-1.5 rounded bg-background text-tertiary break-all mb-1">
+                          <span className="text-accent-cyan font-semibold">Matched Excerpt: </span>
+                          "{rule.matched_excerpt}"
+                        </div>
+                      )}
+                      {rule.mitigation && (
+                        <div className="text-[11px] text-tertiary mt-1 flex items-start gap-1">
+                          <span className="text-accent-cyan font-bold">Mitigation:</span>
+                          <span>{rule.mitigation}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="p-2.5 rounded bg-surface border border-subtle mb-3 flex items-center gap-2 text-xs text-secondary">
+                <ShieldCheck size={16} className="text-safe shrink-0" />
+                <span>
+                  No heuristic rule violations detected across all 7 threat categories. Baseline input validated clean.
+                </span>
+              </div>
+            )}
 
-            {/* Test Connection Button */}
-            <button
-              onClick={() => handleTestProvider(selectedProvider)}
-              disabled={testingProvider !== null}
-              className="btn btn-secondary"
-              style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+            {/* Coverage Limitation & Disclaimer Box */}
+            <div
+              className="p-2.5 rounded text-[11px] flex items-start gap-2"
+              style={{
+                background: 'rgba(100, 116, 139, 0.08)',
+                border: '1px solid rgba(100, 116, 139, 0.2)',
+                color: 'var(--text-tertiary)',
+              }}
             >
-              <Activity size={14} className={testingProvider ? 'animate-spin' : ''} />
-              {testingProvider ? 'Pinging API...' : 'Test Connection'}
+              <AlertTriangle size={14} className="shrink-0 mt-0.5 text-tertiary" />
+              <span>
+                <strong>Coverage Notice:</strong> {result.local_engine_details.coverage_limitation ||
+                  'Deterministic heuristic rules detect known attack patterns and structural anomalies offline. They do not guarantee protection against novel zero-day adversarial jailbreaks. Enhanced AI analysis recommended for defense-in-depth.'}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Quarantine Approval Button (if quarantined) */}
+        {result.decision === 'QUARANTINE' && (
+          <div
+            style={{
+              padding: '0.85rem 1rem',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--bg-surface-elevated)',
+              border: '1px solid var(--border-medium)',
+              marginBottom: '1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1rem',
+            }}
+          >
+            <div>
+              <strong className="text-xs text-primary block">Quarantine Exception Authorization</strong>
+              <span className="text-xs text-tertiary">Analyst override allows safe execution and logs reviewer audit.</span>
+            </div>
+            <button
+              className="btn btn-primary text-xs"
+              onClick={handleApproveQuarantined}
+              disabled={approvingEvent}
+            >
+              {approvingEvent ? 'Approving...' : 'Approve Execution'}
             </button>
           </div>
-        </SpotlightCard>
+        )}
 
-        {/* JUDGE TEST SCENARIOS PRESET BAR */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-            <Sparkles size={16} style={{ color: 'var(--color-accent)' }} />
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)' }}>
-              Hackathon Judge Demonstration Scenarios
-            </h3>
+        {/* Real Model-to-MCP Tool Interception & Execution Panel */}
+        {result.tool_execution && (
+          <div
+            style={{
+              padding: '0.85rem 1rem',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--bg-surface-elevated)',
+              border: `1px solid ${
+                result.tool_execution.status === 'AUTHORIZED'
+                  ? 'var(--color-safe-border)'
+                  : 'var(--color-critical-border)'
+              }`,
+              marginBottom: '1.25rem',
+            }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Wrench
+                  size={14}
+                  style={{
+                    color:
+                      result.tool_execution.status === 'AUTHORIZED'
+                        ? 'var(--color-safe)'
+                        : 'var(--color-critical)',
+                  }}
+                />
+                <strong className="text-xs text-primary font-mono">
+                  MCP Tool Boundary: {result.tool_execution.tool}
+                </strong>
+                {result.tool_execution.mcp_server && (
+                  <span className="mono text-xs text-tertiary">
+                    [{result.tool_execution.mcp_server}]
+                  </span>
+                )}
+                {result.tool_execution.invoked_by === 'model' && (
+                  <span className="status-badge status-default text-xs" style={{ fontSize: '0.65rem' }}>
+                    Autonomous Model Request
+                  </span>
+                )}
+              </div>
+              <span
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.68rem',
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 700,
+                  background:
+                    result.tool_execution.status === 'AUTHORIZED'
+                      ? 'var(--color-safe-bg)'
+                      : 'var(--color-critical-bg)',
+                  color:
+                    result.tool_execution.status === 'AUTHORIZED'
+                      ? 'var(--color-safe)'
+                      : 'var(--color-critical)',
+                  border: `1px solid ${
+                    result.tool_execution.status === 'AUTHORIZED'
+                      ? 'var(--color-safe-border)'
+                      : 'var(--color-critical-border)'
+                  }`,
+                }}
+              >
+                {result.tool_execution.status}
+              </span>
+            </div>
+
+            <p className="text-xs text-secondary m-0 mb-2">
+              {result.tool_execution.reason ||
+                'Tool execution evaluated by runtime policy gateway and executed over JSON-RPC 2.0 stdio transport.'}
+            </p>
+
+            {result.tool_execution.output !== undefined && (
+              <div>
+                <span className="text-xs text-tertiary block font-mono mb-1">
+                  Verified Stdio Output:
+                </span>
+                <pre
+                  style={{
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '4px',
+                    padding: '0.6rem',
+                    fontSize: '0.72rem',
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-secondary)',
+                    maxHeight: '130px',
+                    overflowY: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    margin: 0,
+                  }}
+                >
+                  {typeof result.tool_execution.output === 'string'
+                    ? result.tool_execution.output
+                    : JSON.stringify(result.tool_execution.output, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* AI Model Output */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-semibold text-secondary flex items-center gap-1.5">
+              <Sparkles size={13} className="text-accent" />
+              <span>AI Model Output ({result.provider} · {result.model}):</span>
+            </label>
+            {result.ai_response && (
+              <button
+                className="btn btn-secondary text-xs"
+                onClick={handleCopyResponse}
+                style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+              >
+                {copiedResponse ? <Check size={12} /> : <Copy size={12} />}
+                <span>{copiedResponse ? 'Copied' : 'Copy'}</span>
+              </button>
+            )}
           </div>
 
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '0.85rem',
+              padding: '0.85rem',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-light)',
+              fontSize: '0.8rem',
+              fontFamily: 'var(--font-mono)',
+              color: result.ai_response ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              lineHeight: 1.5,
+              minHeight: '90px',
+              maxHeight: '220px',
+              overflowY: 'auto',
+              whiteSpace: 'pre-wrap',
             }}
           >
-            {scenarios.map((sc) => {
-              const isActive = activeScenario === sc.id;
-              let variant: BadgeVariant = 'default';
-              if (sc.expected_decision === 'ALLOW') variant = 'safe';
-              else if (sc.expected_decision === 'BLOCK') variant = 'critical';
-              else if (sc.expected_decision.includes('DENY')) variant = 'medium';
+            {result.ai_response || (
+              <span className="italic text-tertiary">
+                {result.test_mode === 'analysis_only'
+                  ? '[Security Analysis Only: Generative AI model inference was intentionally bypassed per test mode configuration. Switch to "Live AI Security Test" mode to evaluate model responses.]'
+                  : result.decision === 'BLOCK'
+                  ? '[Generation Suppressed: The Semantic Firewall intercepted and terminated execution before model generation to protect agent integrity.]'
+                  : result.decision === 'QUARANTINE'
+                  ? '[Generation Held: Quarantined pending SOC analyst review.]'
+                  : '[No response returned by provider.]'}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Detector Inspection Drawer / Details */}
+        <div
+          style={{
+            padding: '0.85rem',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--bg-surface-elevated)',
+            border: '1px solid var(--border-subtle)',
+          }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-secondary flex items-center gap-1.5">
+              <Layers size={13} />
+              <span>Pipeline Stage Traces & Diagnostics</span>
+            </span>
+            <button
+              type="button"
+              className="text-xs text-accent bg-transparent border-none cursor-pointer"
+              onClick={() => setShowDetails(!showDetails)}
+            >
+              {showDetails ? 'Hide Details' : 'Show Details'}
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-tertiary">
+            <span>Execution Stages Evaluated:</span>
+            <strong className="text-primary mono">
+              {result.pipeline_trace?.length || 0} stages ({result.latency_ms}ms)
+            </strong>
+          </div>
+
+          {showDetails && (
+            <div className="mt-3 pt-3 border-t border-subtle flex flex-col gap-2 text-xs">
+              {result.pipeline_trace?.map((trace, idx) => (
+                <div key={idx} className="flex justify-between items-center py-1 border-b border-subtle">
+                  <div>
+                    <span className="text-primary font-medium">{trace.name}</span>
+                    <span className="text-tertiary ml-2 mono">({trace.stage})</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="mono text-tertiary">{trace.latency_ms}ms</span>
+                    <span className={`mono font-bold text-xs ${trace.status === 'BLOCKED' ? 'text-critical' : trace.status === 'ALLOWED' ? 'text-safe' : 'text-tertiary'}`}>
+                      {trace.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {result.security_event_id && (
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-tertiary">Logged Audit Event:</span>
+                  <Link
+                    to="/events"
+                    className="text-accent flex items-center gap-1 mono"
+                  >
+                    <span>{result.security_event_id.slice(0, 16)}...</span>
+                    <ExternalLink size={11} />
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Quick Actions Footer */}
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-subtle flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary text-xs"
+              onClick={handleExecute}
+              disabled={isLoading}
+            >
+              <RotateCw size={13} className={isLoading ? 'animate-spin' : ''} />
+              <span>Rerun Security Test</span>
+            </button>
+            {result.ai_response && (
+              <button
+                type="button"
+                className="btn btn-secondary text-xs"
+                onClick={handleCopyResponse}
+              >
+                {copiedResponse ? <Check size={13} className="text-safe" /> : <Copy size={13} />}
+                <span>{copiedResponse ? 'Copied' : 'Copy Output'}</span>
+              </button>
+            )}
+          </div>
+          {result.security_event_id && (
+            <Link
+              to="/events"
+              className="btn btn-secondary text-xs flex items-center gap-1.5"
+              style={{ textDecoration: 'none' }}
+            >
+              <span>View Audit in History</span>
+              <ExternalLink size={12} />
+            </Link>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const categories = ['all', ...Array.from(new Set(scenarios.map((s) => s.category)))];
+  const filteredScenarios = selectedCategory === 'all'
+    ? scenarios
+    : scenarios.filter((s) => s.category === selectedCategory);
+
+  return (
+    <div className="dashboard-container">
+      <PageHeader
+        title="Test a Prompt"
+        description="Enter your own prompt or choose from examples. Then run a security test to see the analysis and results."
+        icon={<Terminal size={20} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-tertiary">Active Target:</span>
+            <span className="status-badge status-default uppercase font-mono">
+              {selectedProvider} ({providers.find(p => p.id === selectedProvider)?.model || 'default'})
+            </span>
+          </div>
+        }
+      />
+
+      {/* 1. Provider Selector Bar */}
+      <section className="glass-surface p-5 mb-4" style={{ borderRadius: 'var(--radius-md)' }}>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <div className="page-header-icon-box" style={{ width: '34px', height: '34px' }}>
+              <Cpu size={18} />
+            </div>
+            <div>
+              <h3 className="m-0 text-sm font-semibold text-primary">Target AI Intelligence Provider</h3>
+              <p className="m-0 text-xs text-tertiary">Select generation model evaluated for permitted requests</p>
+            </div>
+          </div>
+
+          {/* Provider Buttons */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {providers.map((p) => {
+              const isSelected = selectedProvider === p.id;
+              const isOnline = p.status === 'operational';
+              const isTesting = testingProvider === p.id;
 
               return (
                 <div
-                  key={sc.id}
-                  onClick={() => handleApplyScenario(sc)}
+                  key={p.id}
+                  onClick={() => setSelectedProvider(p.id)}
                   style={{
-                    padding: '1rem',
-                    borderRadius: '0.65rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.45rem 0.75rem',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
                     cursor: 'pointer',
-                    background: isActive ? 'rgba(59, 130, 246, 0.1)' : 'var(--color-surface)',
-                    border: isActive ? '1px solid var(--color-accent)' : '1px solid var(--color-border)',
-                    boxShadow: isActive ? '0 0 15px rgba(59, 130, 246, 0.2)' : 'none',
-                    transition: 'all 0.2s ease',
+                    border: isSelected ? '1px solid var(--color-accent)' : '1px solid var(--border-light)',
+                    background: isSelected ? 'var(--color-accent-muted)' : 'var(--bg-surface)',
+                    color: isSelected ? '#ffffff' : 'var(--text-secondary)',
+                    transition: 'all 0.15s ease',
                   }}
+                  title={p.message || p.display_name}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                    <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)' }}>
-                      {sc.title}
+                  <span
+                    style={{
+                      width: '7px',
+                      height: '7px',
+                      borderRadius: '50%',
+                      background: isOnline ? 'var(--color-safe)' : p.is_configured ? 'var(--color-medium)' : 'var(--text-muted)',
+                    }}
+                  />
+                  <span>{p.display_name}</span>
+                  <span className="mono text-xs text-tertiary font-normal">({p.model})</span>
+                  {!p.is_configured && (
+                    <span 
+                      style={{ 
+                        fontSize: '0.60rem', 
+                        padding: '1px 4px', 
+                        borderRadius: '3px', 
+                        background: 'rgba(255, 255, 255, 0.08)', 
+                        color: 'var(--text-muted)',
+                        fontWeight: 500
+                      }}
+                    >
+                      UNCONFIGURED
                     </span>
-                    <Badge variant={variant}>
-                      {sc.expected_decision}
-                    </Badge>
-                  </div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', lineHeight: '1.4', marginBottom: '0.65rem' }}>
-                    {sc.description}
-                  </p>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--color-accent)', fontWeight: 500 }}>
-                    Click to load test case →
-                  </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={(e) => handleTestProvider(e, p.id)}
+                    disabled={isTesting}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      padding: '2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    title="Ping connectivity"
+                  >
+                    <RotateCw size={11} className={isTesting ? 'animate-spin text-accent' : 'hover:text-primary'} />
+                  </button>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* INTERACTIVE PLAYGROUND CONSOLE */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
-          <SpotlightCard className="p-6" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Terminal size={18} style={{ color: 'var(--color-accent)' }} />
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--color-text)' }}>Input & Evaluation Payload</h3>
+        {/* Unconfigured Provider Advisory Notice */}
+        {(() => {
+          const activeP = providers.find(p => p.id === selectedProvider);
+          if (activeP && !activeP.is_configured) {
+            return (
+              <div 
+                className="mt-3 p-2.5 rounded text-xs flex items-center justify-between"
+                style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', color: 'var(--color-medium)' }}
+              >
+                <span>
+                  Notice: <strong>{activeP.display_name}</strong> is currently unconfigured. Requests will report an honest provider error unless the API key is configured in <code>backend/.env</code>.
+                </span>
+                <span className="mono text-xs">Deterministic Local is active default</span>
               </div>
-              <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-                {prompt.length} / 50,000 characters
-              </span>
+            );
+          }
+          return null;
+        })()}
+      </section>
+
+      {/* 2. Main Two-Column Playground Workspace */}
+      <div className="playground-grid" style={{ marginBottom: '2.5rem' }}>
+        {/* Left Column: Security Testing Workspace */}
+        <div className="flex flex-col gap-4">
+          <div className="glass-surface panel-container" style={{ borderRadius: 'var(--radius-md)' }}>
+            <div className="panel-header">
+              <div>
+                <h2 className="text-base font-semibold flex items-center gap-2 text-white">
+                  <Terminal size={17} className="text-accent-cyan" />
+                  <span>Interactive Security Testing</span>
+                </h2>
+                <p className="text-xs text-secondary">
+                  Evaluate real-time agent firewall defense, prompt injection detection, and tool execution boundaries.
+                </p>
+              </div>
             </div>
 
-            {/* Prompt Textarea */}
-            <div style={{ marginBottom: '1rem' }}>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Enter user prompt or paste suspicious document content for real-time security inspection..."
-                rows={5}
-                style={{
-                  width: '100%',
-                  padding: '0.85rem',
-                  borderRadius: '0.5rem',
-                  background: 'var(--color-surface-subtle)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text)',
-                  fontSize: '0.9rem',
-                  lineHeight: '1.5',
-                  fontFamily: 'monospace',
-                  resize: 'vertical',
-                  outline: 'none',
-                }}
-              />
-            </div>
-
-            {/* System Persona Context Toggle */}
-            <div style={{ marginBottom: '1rem' }}>
+            {/* Custom Prompt and Example Prompts Tabs */}
+            <div className="flex border-b border-border mb-4 px-1">
               <button
                 type="button"
-                onClick={() => setShowSystemPrompt(!showSystemPrompt)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--color-accent)',
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  padding: 0,
-                  fontWeight: 500,
-                }}
+                onClick={() => setActiveTab('custom')}
+                className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+                  activeTab === 'custom'
+                    ? 'border-accent-cyan text-accent-cyan'
+                    : 'border-transparent text-secondary hover:text-white'
+                }`}
+                style={{ background: 'transparent' }}
               >
-                {showSystemPrompt ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                <span>{showSystemPrompt ? 'Hide System Prompt Context' : 'Configure Custom System Prompt Context'}</span>
+                Custom Prompt
               </button>
 
-              <AnimatePresence>
-                {showSystemPrompt && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    style={{ marginTop: '0.75rem' }}
-                  >
-                    <textarea
-                      value={systemPrompt}
-                      onChange={(e) => setSystemPrompt(e.target.value)}
-                      placeholder="e.g. You are an autonomous AI research agent. Protect confidential internal information."
-                      rows={2}
-                      style={{
-                        width: '100%',
-                        padding: '0.65rem',
-                        borderRadius: '0.5rem',
-                        background: 'var(--color-surface-subtle)',
-                        border: '1px solid var(--color-border)',
-                        color: 'var(--color-text)',
-                        fontSize: '0.85rem',
-                        fontFamily: 'monospace',
-                        outline: 'none',
-                      }}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Tool Boundary Request Selector */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '1rem',
-                paddingTop: '0.85rem',
-                borderTop: '1px solid var(--color-border)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                <Wrench size={16} style={{ color: 'var(--color-text-muted)' }} />
-                <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>Demonstration Tool Call:</span>
-                <select
-                  value={selectedTool}
-                  onChange={(e) => setSelectedTool(e.target.value)}
-                  style={{
-                    background: 'var(--color-surface-subtle)',
-                    border: '1px solid var(--color-border)',
-                    color: 'var(--color-text)',
-                    borderRadius: '0.4rem',
-                    padding: '0.4rem 0.75rem',
-                    fontSize: '0.85rem',
-                    outline: 'none',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="none">None (Standard Prompt Only)</option>
-                  <option value="read_database">read_database (Allowed Demo Query)</option>
-                  <option value="fetch_url">fetch_url (Allowlisted HTTP Request)</option>
-                  <option value="send_notification">send_notification (Alert Channel)</option>
-                  <option value="execute_shell">execute_shell (RESTRICTED - Tool Policy Deny)</option>
-                </select>
-              </div>
-
-              {/* Submit Button */}
               <button
-                onClick={handleExecute}
-                disabled={isLoading}
-                className="btn btn-primary"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  padding: '0.65rem 1.5rem',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
-                }}
+                type="button"
+                onClick={() => setActiveTab('examples')}
+                className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  activeTab === 'examples'
+                    ? 'border-accent-cyan text-accent-cyan'
+                    : 'border-transparent text-secondary hover:text-white'
+                }`}
+                style={{ background: 'transparent' }}
               >
-                {isLoading ? (
-                  <>
-                    <Activity size={18} className="animate-spin" />
-                    <span>Evaluating Pipeline...</span>
-                  </>
-                ) : (
-                  <>
-                    <Play size={18} />
-                    <span>Evaluate & Execute</span>
-                  </>
+                <span>Example Prompts</span>
+                {scenarios.length > 0 && (
+                  <span 
+                    className="px-1.5 py-0.5 rounded text-[10px] font-mono"
+                    style={{ background: 'rgba(34, 200, 245, 0.15)', color: 'var(--accent-cyan)' }}
+                  >
+                    {scenarios.length}
+                  </span>
                 )}
               </button>
             </div>
-          </SpotlightCard>
 
-          {/* REAL-TIME ENFORCEMENT & EXECUTION RESULTS */}
-          <AnimatePresence>
-            {executionResult && (
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 15 }}
-                style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
-              >
-                {/* 1. DECISION BANNER */}
-                <div
-                  style={{
-                    padding: '1.25rem 1.5rem',
-                    borderRadius: '0.75rem',
-                    background:
-                      executionResult.decision === 'ALLOW'
-                        ? 'rgba(16, 185, 129, 0.12)'
-                        : executionResult.decision === 'BLOCK'
-                        ? 'rgba(239, 68, 68, 0.12)'
-                        : 'rgba(245, 158, 11, 0.12)',
-                    border:
-                      executionResult.decision === 'ALLOW'
-                        ? '1px solid rgba(16, 185, 129, 0.3)'
-                        : executionResult.decision === 'BLOCK'
-                        ? '1px solid rgba(239, 68, 68, 0.3)'
-                        : '1px solid rgba(245, 158, 11, 0.3)',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: '1rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div
+            {/* TAB CONTENT: Custom Prompt */}
+            {activeTab === 'custom' && (
+              <div>
+                {/* Test Mode Selector */}
+                <div className="mb-4">
+                  <label className="text-xs font-semibold text-secondary block mb-1.5">
+                    Select Security Test Mode:
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => setTestMode('live_ai')}
+                      disabled={isLoading}
                       style={{
-                        padding: '0.65rem',
-                        borderRadius: '0.5rem',
-                        background:
-                          executionResult.decision === 'ALLOW'
-                            ? 'var(--color-safe)'
-                            : executionResult.decision === 'BLOCK'
-                            ? 'var(--color-danger)'
-                            : 'var(--color-warning)',
-                        color: '#fff',
+                        padding: '0.75rem',
+                        borderRadius: 'var(--radius-sm)',
+                        border: `1px solid ${testMode === 'live_ai' ? 'var(--accent-cyan)' : 'var(--border)'}`,
+                        background: testMode === 'live_ai' ? 'rgba(34, 200, 245, 0.1)' : 'var(--surface)',
+                        color: 'var(--text-primary)',
+                        cursor: isLoading ? 'not-allowed' : 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 0.15s ease',
+                        opacity: isLoading ? 0.6 : 1,
                       }}
                     >
-                      {executionResult.decision === 'ALLOW' ? (
-                        <ShieldCheck size={26} />
-                      ) : executionResult.decision === 'BLOCK' ? (
-                        <ShieldAlert size={26} />
-                      ) : (
-                        <AlertTriangle size={26} />
-                      )}
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                        <span
-                          style={{
-                            fontSize: '1.25rem',
-                            fontWeight: 700,
-                            letterSpacing: '0.02em',
-                            color:
-                              executionResult.decision === 'ALLOW'
-                                ? 'var(--color-safe)'
-                                : executionResult.decision === 'BLOCK'
-                                ? 'var(--color-danger)'
-                                : 'var(--color-warning)',
-                          }}
-                        >
-                          ENFORCEMENT DECISION: {executionResult.decision}
-                        </span>
-                        <Badge
-                          variant={
-                            executionResult.decision === 'ALLOW'
-                              ? 'safe'
-                              : executionResult.decision === 'BLOCK'
-                              ? 'critical'
-                              : 'medium'
-                          }
-                        >
-                          Risk Score: {executionResult.risk_score} / 100
-                        </Badge>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Sparkles size={16} className={testMode === 'live_ai' ? 'text-accent-cyan' : 'text-tertiary'} />
+                        <strong className="text-xs" style={{ color: testMode === 'live_ai' ? 'var(--accent-cyan)' : 'var(--text-primary)' }}>
+                          Live AI Security Test
+                        </strong>
                       </div>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--color-text)', marginTop: '0.25rem' }}>
-                        {executionResult.reason}
+                      <p className="text-xs m-0 text-secondary leading-tight" style={{ fontSize: '0.72rem' }}>
+                        Full pipeline: firewall inspection + real AI generation & tool boundary execution.
                       </p>
-                    </div>
-                  </div>
+                    </button>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'block' }}>
-                        Total Pipeline Latency
-                      </span>
-                      <span style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text)', fontFamily: 'monospace' }}>
-                        {executionResult.latency_ms} ms
-                      </span>
-                    </div>
-
-                    {executionResult.decision === 'QUARANTINE' && (
-                      <button
-                        onClick={handleApproveQuarantined}
-                        disabled={approvingEvent}
-                        className="btn btn-primary"
-                        style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                      >
-                        <CheckCheck size={14} />
-                        {approvingEvent ? 'Approving...' : 'Approve Execution (SOC Override)'}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setTestMode('analysis_only')}
+                      disabled={isLoading}
+                      style={{
+                        padding: '0.75rem',
+                        borderRadius: 'var(--radius-sm)',
+                        border: `1px solid ${testMode === 'analysis_only' ? 'var(--accent-cyan)' : 'var(--border)'}`,
+                        background: testMode === 'analysis_only' ? 'rgba(34, 200, 245, 0.1)' : 'var(--surface)',
+                        color: 'var(--text-primary)',
+                        cursor: isLoading ? 'not-allowed' : 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 0.15s ease',
+                        opacity: isLoading ? 0.6 : 1,
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Shield size={16} className={testMode === 'analysis_only' ? 'text-accent-cyan' : 'text-tertiary'} />
+                        <strong className="text-xs" style={{ color: testMode === 'analysis_only' ? 'var(--accent-cyan)' : 'var(--text-primary)' }}>
+                          Local Security Engine (No External AI Required)
+                        </strong>
+                      </div>
+                      <p className="text-xs m-0 text-secondary leading-tight" style={{ fontSize: '0.72rem' }}>
+                        Air-gapped offline analysis: Unicode normalization, rules across 7 attack categories & canaries.
+                      </p>
+                    </button>
                   </div>
                 </div>
 
-                {/* 2. REQUEST LIFECYCLE PIPELINE TRACE */}
-                <SpotlightCard className="p-5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                    <Layers size={17} style={{ color: 'var(--color-accent)' }} />
-                    <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text)' }}>
-                      Request Inspection & Enforcement Pipeline Trace
-                    </h3>
-                  </div>
+                {/* Prompt Toolbar & Editor */}
+                <div className="form-group mb-3">
+                  <div className="prompt-toolbar">
+                    <label htmlFor="playground-prompt" className="text-xs font-semibold text-secondary flex items-center gap-1.5">
+                      <Terminal size={13} className="text-accent-cyan" />
+                      <span>Custom Prompt Input:</span>
+                    </label>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                    {executionResult.pipeline_trace.map((step, idx) => {
-                      const isSuccess = ['PASSED', 'ALLOW', 'SUCCESS', 'AUTHORIZED'].includes(step.status);
-                      const isDanger = ['BLOCK', 'DENIED', 'ERROR', 'TRIPWIRE_TRIGGERED'].includes(step.status);
-                      const isWarn = ['QUARANTINE', 'FLAGGED'].includes(step.status);
-
-                      return (
-                        <div
-                          key={idx}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '0.65rem 0.85rem',
-                            borderRadius: '0.5rem',
-                            background: 'var(--color-surface-subtle)',
-                            border: '1px solid var(--color-border)',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ color: isSuccess ? 'var(--color-safe)' : isDanger ? 'var(--color-danger)' : 'var(--color-warning)' }}>
-                              {isSuccess ? <CheckCircle2 size={16} /> : isDanger ? <XCircle size={16} /> : <AlertOctagon size={16} />}
-                            </div>
-                            <div>
-                              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)' }}>
-                                Stage {idx + 1}: {step.name}
-                              </span>
-                              {step.details && (
-                                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '0.15rem' }}>
-                                  {step.details}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                            <Badge
-                              variant={isSuccess ? 'safe' : isDanger ? 'critical' : isWarn ? 'medium' : 'default'}
-                            >
-                              {step.status}
-                            </Badge>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>
-                              {step.latency_ms}ms
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </SpotlightCard>
-
-                {/* 3. AI RESPONSE CONTAINER (When ALLOW) */}
-                {executionResult.decision === 'ALLOW' && executionResult.ai_response && (
-                  <SpotlightCard className="p-5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Sparkles size={17} style={{ color: 'var(--color-safe)' }} />
-                        <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text)' }}>
-                          Verified Model Response ({executionResult.provider} / {executionResult.model})
-                        </h3>
-                      </div>
+                    <div className="prompt-toolbar-actions">
                       <button
-                        onClick={handleCopyResponse}
-                        className="btn btn-secondary"
-                        style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                        type="button"
+                        onClick={() => setActiveTab('examples')}
+                        className="btn btn-secondary text-xs"
+                        style={{ padding: '3px 8px', fontSize: '0.72rem', gap: '4px', height: '26px' }}
+                        title="Browse example attack scenarios"
                       >
-                        {copiedResponse ? <Check size={14} /> : <Copy size={14} />}
-                        <span>{copiedResponse ? 'Copied' : 'Copy'}</span>
+                        <BookOpen size={12} />
+                        <span>Load Example</span>
                       </button>
-                    </div>
 
-                    <div
-                      style={{
-                        padding: '1rem',
-                        borderRadius: '0.5rem',
-                        background: 'var(--color-surface-subtle)',
-                        border: '1px solid var(--color-border)',
-                        color: 'var(--color-text)',
-                        fontSize: '0.85rem',
-                        lineHeight: '1.6',
-                        whiteSpace: 'pre-wrap',
-                        fontFamily: 'system-ui, sans-serif',
-                      }}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPrompt('');
+                          setActiveScenario(null);
+                          setValidationError(null);
+                          setExecutionError(null);
+                        }}
+                        disabled={isLoading || !prompt}
+                        className="btn btn-secondary text-xs"
+                        style={{ padding: '3px 8px', fontSize: '0.72rem', gap: '4px', height: '26px' }}
+                        title="Clear prompt text"
+                      >
+                        <Trash2 size={12} />
+                        <span>Clear</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!prompt}
+                        onClick={() => {
+                          if (!prompt) return;
+                          navigator.clipboard.writeText(prompt);
+                          showToast('Prompt copied to clipboard', 'info');
+                        }}
+                        className="btn btn-secondary text-xs"
+                        style={{ padding: '3px 8px', fontSize: '0.72rem', gap: '4px', height: '26px' }}
+                        title="Copy prompt"
+                      >
+                        <Copy size={12} />
+                        <span>Copy</span>
+                      </button>
+
+                      <span
+                        className={`text-xs mono ml-1 font-semibold ${
+                          prompt.length > 50000 ? 'text-critical' : 'text-secondary'
+                        }`}
+                        style={{ fontSize: '0.72rem' }}
+                      >
+                        {prompt.length.toLocaleString()} / 50,000 characters
+                      </span>
+                    </div>
+                  </div>
+
+                  <textarea
+                    id="playground-prompt"
+                    rows={8}
+                    value={prompt}
+                    onChange={(e) => {
+                      setPrompt(e.target.value);
+                      if (validationError && e.target.value.trim()) setValidationError(null);
+                      if (executionError) setExecutionError(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                        e.preventDefault();
+                        handleExecute();
+                      }
+                    }}
+                    placeholder="Type or paste your own prompt here..."
+                    disabled={isLoading}
+                    className="custom-prompt-textarea"
+                    style={{
+                      width: '100%',
+                      padding: '0.85rem',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: 'var(--background, #0B1120)',
+                      border: validationError ? '1px solid var(--color-critical)' : '1px solid var(--border)',
+                      color: 'var(--text-primary, #F1F5F9)',
+                      fontSize: '0.85rem',
+                      fontFamily: 'var(--font-mono, monospace)',
+                      resize: 'vertical',
+                      lineHeight: 1.5,
+                      opacity: isLoading ? 0.6 : 1,
+                      cursor: isLoading ? 'not-allowed' : 'text',
+                    }}
+                  />
+
+                  {validationError && (
+                    <div className="flex items-center gap-1.5 mt-2 text-xs text-critical font-medium">
+                      <AlertTriangle size={14} />
+                      <span>{validationError}</span>
+                    </div>
+                  )}
+
+                  {executionError && (
+                    <div 
+                      className="flex items-center gap-1.5 mt-2 p-2.5 rounded text-xs text-critical font-medium" 
+                      style={{ background: 'var(--color-critical-bg)', border: '1px solid var(--color-critical-border)' }}
                     >
-                      {executionResult.ai_response}
+                      <ShieldAlert size={14} className="shrink-0" />
+                      <span>{executionError}</span>
                     </div>
+                  )}
+                </div>
 
-                    {/* Tool Result if present */}
-                    {executionResult.tool_execution && (
-                      <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-border)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                          <Wrench size={14} style={{ color: 'var(--color-accent)' }} />
-                          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)' }}>
-                            Tool Execution: {executionResult.tool_execution.tool}
-                          </span>
-                          <Badge
-                            variant={executionResult.tool_execution.status === 'AUTHORIZED' ? 'safe' : 'critical'}
-                          >
-                            {executionResult.tool_execution.status}
-                          </Badge>
-                        </div>
-                        {executionResult.tool_execution.output && (
-                          <pre
-                            style={{
-                              padding: '0.65rem',
-                              borderRadius: '0.4rem',
-                              background: 'rgba(0,0,0,0.3)',
-                              color: 'var(--color-text-muted)',
-                              fontSize: '0.75rem',
-                              fontFamily: 'monospace',
-                              overflowX: 'auto',
-                            }}
-                          >
-                            {JSON.stringify(executionResult.tool_execution.output, null, 2)}
-                          </pre>
-                        )}
-                        {executionResult.tool_execution.reason && (
-                          <p style={{ fontSize: '0.8rem', color: 'var(--color-danger)', marginTop: '0.25rem' }}>
-                            {executionResult.tool_execution.reason}
-                          </p>
-                        )}
-                      </div>
+                {/* Primary Action Buttons */}
+                <div className="flex items-center gap-2 mb-4">
+                  <button
+                    type="button"
+                    className="btn btn-primary flex-1"
+                    onClick={handleExecute}
+                    disabled={isLoading}
+                    style={{ padding: '0.75rem', fontSize: '0.88rem', gap: '8px' }}
+                  >
+                    {isLoading ? (
+                      <>
+                        <RotateCw size={15} className="animate-spin" />
+                        <span>Evaluating Firewall & Security Defenses...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play size={15} fill="currentColor" />
+                        <span>
+                          {testMode === 'analysis_only'
+                            ? 'Run Local Security Analysis (No External AI API)'
+                            : 'Run Security Test'}
+                        </span>
+                        <span className="mono text-xs opacity-70">(Ctrl + Enter)</span>
+                      </>
                     )}
-                  </SpotlightCard>
-                )}
+                  </button>
 
-                {/* 4. FORENSIC EXPLANATION & SECURITY EVIDENCE (When BLOCK or QUARANTINE) */}
-                {executionResult.decision !== 'ALLOW' && (
-                  <SpotlightCard className="p-5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                      <Lock size={17} style={{ color: 'var(--color-danger)' }} />
-                      <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text)' }}>
-                        Forensic Explanation & Security Telemetry
-                      </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrompt('');
+                      setActiveScenario(null);
+                      setValidationError(null);
+                      setExecutionError(null);
+                    }}
+                    disabled={isLoading || !prompt}
+                    className="btn btn-secondary"
+                    style={{ padding: '0.75rem 1rem', fontSize: '0.85rem' }}
+                    title="Clear input text"
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                {/* Expandable Advanced Options */}
+                <div className="pt-3 border-t border-border">
+                  <button
+                    type="button"
+                    className="text-xs text-accent-cyan flex items-center justify-between w-full font-medium bg-transparent border-none p-0 cursor-pointer"
+                    onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {showAdvancedOptions ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      <strong>Advanced Options (System Prompt & Tool Gateway)</strong>
+                    </span>
+                    <span className="text-tertiary text-xs">
+                      {showAdvancedOptions ? 'Hide' : 'Expand'}
+                    </span>
+                  </button>
+
+                  {showAdvancedOptions && (
+                    <div className="mt-3 space-y-3 p-3 rounded border border-border bg-surface">
+                      <div>
+                        <label className="text-xs font-semibold text-secondary block mb-1">
+                          Agent System Prompt (Optional):
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={systemPrompt}
+                          onChange={(e) => setSystemPrompt(e.target.value)}
+                          placeholder="System instructions (e.g. 'You are a financial analyst agent. Never disclose confidential client secrets.')"
+                          style={{
+                            width: '100%',
+                            padding: '0.65rem',
+                            borderRadius: 'var(--radius-sm)',
+                            background: 'var(--background, #0B1120)',
+                            border: '1px solid var(--border)',
+                            color: 'var(--text-primary, #F1F5F9)',
+                            fontSize: '0.78rem',
+                            fontFamily: 'var(--font-mono, monospace)',
+                            resize: 'vertical',
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="tool-select" className="text-xs font-semibold text-secondary flex items-center gap-1 mb-1">
+                          <Wrench size={13} />
+                          <span>Tool / MCP Boundary Action:</span>
+                        </label>
+                        <select
+                          id="tool-select"
+                          className="filter-select w-full"
+                          value={selectedTool}
+                          onChange={(e) => setSelectedTool(e.target.value)}
+                          style={{ background: 'var(--background, #0B1120)', color: 'var(--text-primary, #F1F5F9)' }}
+                        >
+                          <option value="autonomous">Autonomous Model Tool Calling (MCP stdio server — model decides)</option>
+                          <option value="get_system_health">Explicit MCP: get_system_health (System & Subsystem Diagnostics)</option>
+                          <option value="get_recent_security_events">Explicit MCP: get_recent_security_events (Audit Event Log)</option>
+                          <option value="inspect_agent_posture">Explicit MCP: inspect_agent_posture (Agent Security Posture)</option>
+                          <option value="github_read_issues">GitHub MCP: github_read_issues (Read issues from allowlisted repo)</option>
+                          <option value="github_list_repositories">GitHub MCP: github_list_repositories (List authorized repositories)</option>
+                          <option value="execute_arbitrary_script">Restricted MCP: execute_arbitrary_script (Disallowed — Default-Deny)</option>
+                          <option value="execute_shell">Restricted: execute_shell (OS Command — Denied by Policy)</option>
+                          <option value="read_database">Sandbox: read_database (Privileged DB Query)</option>
+                          <option value="fetch_url">Sandbox: fetch_url (Outbound Network Egress)</option>
+                          <option value="send_notification">Sandbox: send_notification (Channel Dispatch)</option>
+                          <option value="none">None (Tools Disabled / Plain LLM Chat)</option>
+                        </select>
+                      </div>
                     </div>
+                  )}
+                </div>
+              </div>
+            )}
 
-                    {executionResult.forensic_explanation && (
+            {/* TAB CONTENT: Example Prompts */}
+            {activeTab === 'examples' && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-secondary font-medium">Attack Category Filter:</span>
+                  <span className="text-xs text-tertiary font-mono">
+                    {selectedCategory === 'all' ? `${scenarios.length} presets` : `${filteredScenarios.length} in category`}
+                  </span>
+                </div>
+
+                {/* Category Pills */}
+                <div className="playground-category-filters mb-3">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`category-filter-btn ${selectedCategory === cat ? 'active' : ''}`}
+                    >
+                      {cat === 'all' ? 'All Scenarios' : cat}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Scrollable Scenario Presets */}
+                <div className="scenario-presets-scrollable" style={{ maxHeight: '340px' }}>
+                  {filteredScenarios.map((sc) => {
+                    const isSelected = activeScenario === sc.id;
+                    return (
                       <div
+                        key={sc.id}
+                        className="p-3 rounded border border-border bg-surface flex flex-col justify-between w-full hover:border-accent-cyan transition-colors"
                         style={{
-                          padding: '0.85rem',
-                          borderRadius: '0.5rem',
-                          background: 'rgba(239, 68, 68, 0.08)',
-                          border: '1px solid rgba(239, 68, 68, 0.2)',
-                          color: 'var(--color-text)',
-                          fontSize: '0.85rem',
-                          lineHeight: '1.5',
-                          marginBottom: '1rem',
+                          borderColor: isSelected ? 'var(--accent-cyan)' : undefined,
+                          background: isSelected ? 'rgba(34, 200, 245, 0.08)' : undefined,
                         }}
                       >
-                        {executionResult.forensic_explanation}
-                      </div>
-                    )}
-
-                    {/* Linked Database Records Navigation */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '1rem',
-                        flexWrap: 'wrap',
-                        alignItems: 'center',
-                        padding: '0.75rem',
-                        borderRadius: '0.5rem',
-                        background: 'var(--color-surface-subtle)',
-                        border: '1px solid var(--color-border)',
-                      }}
-                    >
-                      <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-                        Persisted SOC Telemetry:
-                      </div>
-
-                      {executionResult.security_event_id && (
-                        <Link
-                          to="/events"
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
-                            fontSize: '0.8rem',
-                            color: 'var(--color-accent)',
-                            textDecoration: 'none',
-                            fontWeight: 500,
-                          }}
-                        >
-                          <ExternalLink size={13} />
-                          <span>View in Security Events (#{executionResult.security_event_id.slice(0, 8)})</span>
-                        </Link>
-                      )}
-
-                      {executionResult.alert_id && (
-                        <Link
-                          to="/alerts"
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
-                            fontSize: '0.8rem',
-                            color: 'var(--color-warning)',
-                            textDecoration: 'none',
-                            fontWeight: 500,
-                          }}
-                        >
-                          <ExternalLink size={13} />
-                          <span>View in Active Alerts (#{executionResult.alert_id.slice(0, 8)})</span>
-                        </Link>
-                      )}
-                    </div>
-                  </SpotlightCard>
-                )}
-
-                {/* 5. RAW DETECTOR BREAKDOWN INSPECTION */}
-                {executionResult.detector_breakdown && (
-                  <SpotlightCard className="p-5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-                    <button
-                      type="button"
-                      onClick={() => setShowDetectorDetails(!showDetectorDetails)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        width: '100%',
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--color-text)',
-                        cursor: 'pointer',
-                        padding: 0,
-                        fontSize: '0.9rem',
-                        fontWeight: 600,
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Layers size={16} style={{ color: 'var(--color-accent)' }} />
-                        <span>Inspect Raw Detector Breakdown & Similarity Vectors</span>
-                      </div>
-                      {showDetectorDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    </button>
-
-                    <AnimatePresence>
-                      {showDetectorDetails && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          style={{ marginTop: '0.85rem' }}
-                        >
-                          <pre
-                            style={{
-                              padding: '0.85rem',
-                              borderRadius: '0.4rem',
-                              background: 'rgba(0,0,0,0.3)',
-                              color: 'var(--color-text-muted)',
-                              fontSize: '0.8rem',
-                              fontFamily: 'monospace',
-                              overflowX: 'auto',
-                              maxHeight: '300px',
-                            }}
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-1.5">
+                            {sc.expected_decision === 'BLOCK' && <ShieldAlert size={14} className="text-critical shrink-0" />}
+                            {sc.expected_decision === 'QUARANTINE' && <AlertTriangle size={14} className="text-warning shrink-0" />}
+                            {sc.expected_decision === 'ALLOW' && <ShieldCheck size={14} className="text-safe shrink-0" />}
+                            <strong className="text-xs text-white">{sc.title}</strong>
+                          </div>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-border text-tertiary">
+                            {sc.category}
+                          </span>
+                        </div>
+                        <p className="text-xs text-secondary mb-3 leading-snug">
+                          {sc.description}
+                        </p>
+                        <div className="flex items-center justify-between pt-2 border-t border-border mt-auto">
+                          <span className="text-[11px] font-mono text-tertiary">
+                            Expected: <strong className={sc.expected_decision === 'BLOCK' ? 'text-critical' : sc.expected_decision === 'QUARANTINE' ? 'text-warning' : 'text-safe'}>{sc.expected_decision}</strong>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyScenario(sc)}
+                            className="btn btn-primary text-xs"
+                            style={{ padding: '3px 10px', fontSize: '0.72rem' }}
                           >
-                            {JSON.stringify(executionResult.detector_breakdown, null, 2)}
-                          </pre>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </SpotlightCard>
-                )}
-              </motion.div>
+                            Load into Editor
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             )}
-          </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Right Column: Defense Decision & Output Console */}
+        <div className="glass-surface panel-container" style={{ borderRadius: 'var(--radius-md)' }}>
+          <div className="panel-header">
+            <div>
+              <h2 className="text-base font-semibold">Firewall Decision & Telemetry</h2>
+              <p className="text-xs text-tertiary">Inspection outcome, risk scoring, and model generation.</p>
+            </div>
+            {executionResult && (
+              <span className="mono text-xs text-tertiary">{executionResult.latency_ms}ms total</span>
+            )}
+          </div>
+
+          {renderOutputConsole()}
         </div>
       </div>
-    </AppShell>
+    </div>
   );
 };
 

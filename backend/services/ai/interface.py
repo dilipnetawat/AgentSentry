@@ -67,8 +67,10 @@ class BaseAIProvider(ABC):
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        tools: Optional[list[Dict[str, Any]]] = None,
+        messages: Optional[list[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
-        """Generate conversational completion when input is safely permitted"""
+        """Generate conversational completion or model tool calls when input is safely permitted"""
         pass
 

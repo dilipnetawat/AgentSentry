@@ -8,9 +8,10 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   actions?: React.ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | string;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, actions }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, actions, size = 'md' }) => {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -26,6 +27,14 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, actions
       document.body.style.overflow = '';
     };
   }, [isOpen, onClose]);
+
+  const maxWidthMap: Record<string, string> = {
+    sm: '420px',
+    md: '560px',
+    lg: '720px',
+    xl: '880px',
+  };
+  const maxWidth = maxWidthMap[size] || size;
 
   return (
     <AnimatePresence>
@@ -43,6 +52,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, actions
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
             className="modal-content" 
+            style={{ maxWidth }}
             onClick={e => e.stopPropagation()}
           >
             <div className="modal-header">

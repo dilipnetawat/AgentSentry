@@ -18,6 +18,14 @@ export const SkeletonMetric: React.FC<{ className?: string }> = ({ className = '
   <div className={`skeleton skeleton-metric ${className}`} />
 );
 
+export const SkeletonCard: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <div className={`p-4 rounded border border-border bg-surface space-y-2 ${className}`}>
+    <SkeletonTitle width="35%" />
+    <SkeletonText width="90%" />
+    <SkeletonText width="60%" />
+  </div>
+);
+
 export const SkeletonTable: React.FC<{ rows?: number; columns?: number }> = ({ 
   rows = 5, 
   columns = 4 

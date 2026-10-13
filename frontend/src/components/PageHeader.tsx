@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 
 interface PageHeaderProps {
   title: string;
@@ -15,12 +14,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   actions 
 }) => {
   return (
-    <motion.header 
-      initial={{ opacity: 0, y: -6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.22, ease: "easeOut" }}
-      className="workspace-page-header"
-    >
+    <header className="workspace-page-header">
       <div className="page-header-info">
         {icon && (
           <div className="page-header-icon-box">
@@ -37,6 +31,6 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           {actions}
         </div>
       )}
-    </motion.header>
+    </header>
   );
 };
